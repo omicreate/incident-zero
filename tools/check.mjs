@@ -1,82 +1,75 @@
-// 分岐と演出データの整合チェック(依存なし)。CI と手元の両方で `node tools/check.mjs` を実行する。
-// public/index.html から「const SCENARIOS」〜「状態」コメントの間のデータ部だけを取り出して検証する。
-import { readFileSync } from "node:fs";
+// 一夜の整合チェック(依存なし)。CI と手元の両方で `node tools/check.mjs` を実行する。
+// public/index.html の「ENGINE START」〜「ENGINE END」だけを取り出し、画面なしで何百回も遊ばせて確かめる。
+import { readFileSync, existsSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const START = "const SCENARIOS = {";
-const END = "/* ====== 状態 ====== */";
-const a = html.indexOf(START), b = html.indexOf(END);
-if (a < 0 || b < 0 || b < a) {
-  console.error("データ部の目印が見つからない(" + START + " / " + END + ")");
-  process.exit(1);
+const a = html.indexOf("/* ==== ENGINE START"), b = html.indexOf("/* ==== ENGINE END ==== */");
+if (a < 0 || b < 0) { console.error("ENGINE の目印が見つからない"); process.exit(1); }
+const E = runInNewContext(html.slice(a, b) + "\n;({ newGame, doAction, chooseEvent, eventChoices, visibleActions, avail, placeOf, ACTIONS, EVENTS, END })");
+
+const errors = [];
+const img = (name) => new URL("../public/img/" + name + ".jpg", import.meta.url);
+
+// 1. 行動と出来事の id が重ならない
+const ids = [...E.ACTIONS.map((x) => x.id), ...E.EVENTS.map((x) => x.id)];
+ids.filter((x, i) => ids.indexOf(x) !== i).forEach((x) => errors.push("id が重複 " + x));
+
+// 2. 使う絵がそろっている(場所・人物・タイトル・共有用)
+const places = new Set(["office", "exterior", "ogp"]);
+for (const x of [...E.ACTIONS, ...E.EVENTS]) {
+  if (typeof x.place === "string") places.add(x.place);
+  if (typeof x.place === "function") ["server", "makabe"].forEach((p) => places.add(p));
 }
-const NAMES = ["SCENARIOS", "ROLES", "DIFFS", "GLOSS", "TERM", "ADVISOR", "SCRIPTS", "CUT", "GATE", "TECH", "STEP_TECH"];
-const D = runInNewContext(html.slice(a, b) + "\n;({" + NAMES.join(",") + "})");
-const { SCENARIOS, ROLES, SCRIPTS, CUT, GATE, ADVISOR, TERM, TECH, STEP_TECH } = D;
+for (const p of ["miyoshi", "tachibana", "makabe", "oka"]) places.add(p);
+for (const p of places) if (!existsSync(img(p))) errors.push("絵がない public/img/" + p + ".jpg");
 
-const errors = [], warns = [];
-const stats = { scripts: 0, scenes: 0, endings: 0, reachable: 0 };
-const META = new Set(["_learn", "_src"]);
-const ENDS = ["win", "mix", "loss", "atk_success", "atk_partial", "atk_deterred"];
-
-for (const scn of Object.keys(SCENARIOS)) {
-  for (const role of Object.keys(ROLES)) {
-    const key = scn + ":" + role;
-    const S = SCRIPTS[key];
-    stats.scripts++;
-    if (!S) { errors.push("台本がない " + key); continue; }
-    if (!S.start) errors.push(key + ": start がない");
-    const ids = Object.keys(S).filter((k) => !META.has(k));
-    // 1. 選択肢の行き先が存在する。END に行く場面は end キーを持つ
-    for (const sid of ids) {
-      stats.scenes++;
-      const sc = S[sid];
-      if (!Array.isArray(sc.choices) || sc.choices.length === 0) errors.push(key + ":" + sid + " 選択肢がない");
-      let terminal = false;
-      (sc.choices || []).forEach((ch, i) => {
-        if (ch.next === "END") terminal = true;
-        else if (!S[ch.next]) errors.push(key + ":" + sid + " choice[" + i + "] → 存在しない場面 " + ch.next);
-      });
-      if (terminal) {
-        stats.endings++;
-        if (!sc.end) errors.push(key + ":" + sid + " 終端なのに end キーがない");
-        else if (!ENDS.includes(sc.end)) errors.push(key + ":" + sid + " 不正な end キー " + sc.end);
-      }
-    }
-    // 2. start から全場面に届く(幅優先)
-    const seen = new Set(), q = ["start"];
-    while (q.length) {
-      const id = q.shift();
-      if (seen.has(id) || !S[id]) continue;
-      seen.add(id);
-      (S[id].choices || []).forEach((ch) => { if (ch.next !== "END" && !seen.has(ch.next)) q.push(ch.next); });
-    }
-    stats.reachable += seen.size;
-    for (const sid of ids) if (!seen.has(sid)) warns.push(key + ":" + sid + " start から届かない");
-    // 3. 学びと出典
-    if (!Array.isArray(S._learn) || S._learn.length < 3) errors.push(key + ": _learn が足りない");
-    if (!S._src) errors.push(key + ": _src がない");
+// 3. 再現できる乱数で遊ばせる
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const okActs = (g) => E.visibleActions(g).filter((x) => E.avail(g, x).ok).map((x) => x.id);
+const okChoices = (g) => E.eventChoices(g).map((c, i) => (c.need && c.need(g) ? -1 : i)).filter((i) => i >= 0);
+function play(seed, act, ev) {
+  const r = rng(seed), g = E.newGame(r);
+  let n = 0;
+  while (!g.ended && n++ < 500) { if (g.pending) E.chooseEvent(g, ev(g, r)); else E.doAction(g, act(g, r)); }
+  return g;
+}
+const pick = (arr, r) => arr[Math.floor(r() * arr.length)];
+// でたらめに遊ぶ人: どの回も 8:30 に結末まで進む
+let broken = 0;
+for (let i = 0; i < 500; i++) {
+  const g = play(1000 + i, (g, r) => pick(okActs(g), r), (g, r) => pick(okChoices(g), r));
+  if (!g.ended || !g.result || g.t !== E.END) broken++;
+}
+if (broken) errors.push("結末まで進まない回 " + broken + " / 500");
+// 何もしない人: いつも C
+const passive = Array.from({ length: 100 }, (_, i) => play(3000 + i, () => "wait", (g) => okChoices(g)[0]));
+if (passive.some((g) => g.result.rank !== "C")) errors.push("何もしないのに C 以外になる回がある");
+// 推理する慣れた人: S が出るが、出すぎない(20〜90%)
+function deduce(g) {
+  const pri = ["cut_outside", "call_ir", "detach_backup", "paper", "wake_director", "notify_staff", "segment", "police", "check_backup", "check_server"];
+  if (g.used.check_server) {
+    if (g.hidden.entry === "mail") pri.push("check_mail", "close_mail");
+    else if (!g.used.check_vpn) pri.push("check_vpn");
+    else pri.push(g.identified && g.hidden.entry === "vpn" ? "close_vpn" : "close_vendor");
   }
+  pri.push("check_admin", "rm_admin");
+  if (g.ir.onsite) pri.push("preserve", "check_process", "rm_task", "rm_tool", "restore_ref");
+  pri.push("rm_task", "neighbor", "report_pref", "check_egress");
+  const ok = okActs(g);
+  return pri.find((x) => ok.includes(x)) || "wait";
 }
-// 4. 演出データのキーは実在の場面を指す
-for (const [name, map] of [["CUT", CUT], ["GATE", GATE], ["ADVISOR", ADVISOR], ["TERM", TERM], ["STEP_TECH", STEP_TECH]]) {
-  for (const k of Object.keys(map)) {
-    const [scn, role, sid] = k.split(":");
-    if (!SCRIPTS[scn + ":" + role] || !SCRIPTS[scn + ":" + role][sid]) errors.push(name + " のキー " + k + " → 場面がない");
-  }
+function careful(g) {
+  const ok = okChoices(g);
+  const want = { ambulance: g.paperReady ? 0 : 1, recovery: g.police ? 1 : 2, threat: ok.includes(1) ? 1 : 0, staff: 0, press: g.director ? 0 : 1,
+    morning: g.closed[g.hidden.entry] && g.removed[g.hidden.backdoor] ? 0 : 1, outpatient: g.paperReady ? 0 : (ok.includes(1) ? 1 : 0) }[g.pending];
+  return want !== undefined && ok.includes(want) ? want : ok[0];
 }
-// 5. 専門解説は全舞台にあり、出典は https
-for (const scn of Object.keys(SCENARIOS)) {
-  const t = TECH[scn];
-  if (!t) { errors.push("TECH がない " + scn); continue; }
-  if (!t.lead?.defend || !t.lead?.attack) errors.push("TECH " + scn + ": lead の攻守どちらかがない");
-  if (!t.chain?.length || !t.ctrl?.length || !t.refs?.length) errors.push("TECH " + scn + ": chain/ctrl/refs が空");
-  (t.refs || []).forEach((r) => { if (!/^https:\/\//.test(r.u)) errors.push("TECH " + scn + ": https でない出典 " + r.u); });
-}
+const skilled = Array.from({ length: 200 }, (_, i) => play(5000 + i, deduce, careful));
+const sRate = skilled.filter((g) => g.result.rank === "S").length / skilled.length;
+if (sRate < 0.2 || sRate > 0.9) errors.push("推理する人の S の割合が想定外 " + Math.round(sRate * 100) + "%");
 
-console.log("STATS", JSON.stringify({ ...stats, techTags: Object.keys(STEP_TECH).length }));
+console.log("STATS", JSON.stringify({ actions: E.ACTIONS.length, events: E.EVENTS.length, images: places.size, skilledS: Math.round(sRate * 100) + "%" }));
 console.log("ERRORS", errors.length); errors.forEach((e) => console.log("  ✗ " + e));
-console.log("WARNINGS", warns.length); warns.forEach((w) => console.log("  ! " + w));
 console.log(errors.length === 0 ? "CHECK PASS" : "CHECK FAIL");
 process.exit(errors.length === 0 ? 0 : 1);
