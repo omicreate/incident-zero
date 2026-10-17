@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
 <title>さくら町立病院の一夜 — インシデント・ゼロ</title>
 <meta name="description" content="夜中の0時24分、町にひとつの病院のカルテが全部開かなくなる。朝8時30分の外来までに、何を止め、何を見抜き、何を選ぶか。ブラウザで遊べる事件対応ゲーム。">
 <meta property="og:title" content="さくら町立病院の一夜 — インシデント・ゼロ">
 <meta property="og:description" content="夜中の0時24分、町にひとつの病院のカルテが全部開かなくなる。朝8時30分の外来までに、何を止め、何を見抜き、何を選ぶか。">
 <meta property="og:type" content="website">
-<meta property="og:image" content="img/ogp.jpg">
+<meta property="og:image" content="https://omicreate.github.io/incident-zero/img/ogp.jpg">
+<meta property="og:url" content="https://omicreate.github.io/incident-zero/">
+<link rel="canonical" href="https://omicreate.github.io/incident-zero/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0d10">
 <style>
@@ -308,7 +309,7 @@ const ACTIONS = [
       return { h: "VPN機器の記録", lines: ["[VPN] 機器のソフト: 2年前の版のまま(公表済みの弱点が未修正)",
           hit ? "[VPN] 10/18 から毎晩2時台に、管理者IDでログイン。接続元は国外" : "[VPN] 不審なログイン: なし"],
         text: hit ? "直されていない弱点が、実際に使われていた。" : "古いまま放っておかれた機器だ。ただ、今回それが使われた跡はない。" }; } },
-  { id: "call_vendor", prop: { kind: "call", dir: "発信", who: "ひまわり医療システム", sub: "夜間窓口" }, group: "調べる", label: "電子カルテの業者に、保守用の接続の記録を問い合わせる", note: "朝6時までは夜間窓口からの折り返しになる",
+  { id: "call_vendor", prop: { kind: "call", dir: "発信", who: "電子カルテの保守業者", sub: "夜間窓口" }, group: "調べる", label: "電子カルテの業者に、保守用の接続の記録を問い合わせる", note: "朝6時までは夜間窓口からの折り返しになる",
     cost: (g) => g.t < 360 ? 40 : 20,
     run(g) {
       const hit = g.hidden.entry === "vendor";
@@ -548,8 +549,8 @@ const EVENTS = [
       { label: "「確認中です」とだけ答える", run(g) { g.press = "hold"; add(g, "trust", -2); return { text: "記者は「また電話します」と言って切った。" }; } },
       { label: "「通常どおり診療しています」と答える", run(g) { g.press = "deny"; add(g, "trust", -2); return { text: "記者は少し間をおいて、「分かりました」と言った。" }; } },
     ] },
-  { id: "morning", place: "waiting", prop: () => ({ kind: "call", dir: "着信", who: "ひまわり医療システム", sub: "保守担当" }),  at: END, h: () => "朝8時30分",
-    text: () => "ひまわり医療システムの担当者から電話。「遠隔で復旧作業を始めたいので、外との出入口をつないでもらえますか。そのほうが、ずっと早く直せます」。",
+  { id: "morning", place: "waiting", prop: () => ({ kind: "call", dir: "着信", who: "電子カルテの保守業者", sub: "保守担当" }),  at: END, h: () => "朝8時30分",
+    text: () => "電子カルテの保守業者の担当者から電話。「遠隔で復旧作業を始めたいので、外との出入口をつないでもらえますか。そのほうが、ずっと早く直せます」。",
     choices: () => [
       { label: "つなぐ", run(g) { g.reconnect = true; return { text: "業者の作業のために、外との出入口を開けた。", next: "outpatient" }; } },
       { label: "断って、来てもらう", run(g) { g.reconnect = false; return { text: "業者には病院まで来てもらう。着くのは昼すぎになる。", next: "outpatient" }; } },
@@ -693,7 +694,7 @@ function finish(g) {
 const CONFIG = {
   version: "0.4",
   // 公開URL。決まったら入れる(結果の共有文に付く)
-  url: "",
+  url: "https://omicreate.github.io/incident-zero/",
   // 感想と利用状況の送り先(Googleフォーム)。tools/make-form.gs を実行すると出る値をそのまま入れる。null のあいだは何も送らない
   form: null,
 };
@@ -719,7 +720,7 @@ function isNarrow() { return window.matchMedia && window.matchMedia("(max-width:
 function elapsedSec() { return G && G.startedAt ? Math.round((Date.now() - G.startedAt) / 1000) : ""; }
 function send(kind, data) {
   if (!CONFIG.form) return false;
-  // 利用状況は「送らない」を選んだ人からは送らない。感想は本人が送るボタンを押したときだけ
+  // 利用状況は「送らない」を選んだ人からは送らない。感想はプレイヤーが送るボタンを押したときだけ
   if (!STATS.telemetry && kind !== "feedback" && kind !== "comment") return false;
   const all = Object.assign({ kind, sid: G ? G.sid : "", ver: CONFIG.version, device: isNarrow() ? "スマホ" : "PC", plays: STATS.plays, src: SRC }, data || {});
   const body = new URLSearchParams();
