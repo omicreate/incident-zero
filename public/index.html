@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>さくら町立病院の一夜 — インシデント・ゼロ</title>
+<meta name="description" content="夜中の0時24分、町にひとつの病院のカルテが全部開かなくなる。朝8時30分の外来までに、何を止め、何を見抜き、何を選ぶか。ブラウザで遊べる事件対応ゲーム。">
+<meta property="og:title" content="さくら町立病院の一夜 — インシデント・ゼロ">
+<meta property="og:description" content="夜中の0時24分、町にひとつの病院のカルテが全部開かなくなる。朝8時30分の外来までに、何を止め、何を見抜き、何を選ぶか。">
+<meta property="og:type" content="website">
+<meta property="og:image" content="img/ogp.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0d10">
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #12161b; --panel2: #171c22; --line: #252c35;
+    --ink: #e7eaee; --dim: #8d97a4; --accent: #62aefc; --good: #3fcf8e; --bad: #ff6f6f; --warn: #f2b84b;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.75 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 16px; }
+  p { margin: 0 0 10px; }
+  header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  header.top h1 { font-size: 14px; margin: 0; color: var(--dim); font-weight: 600; }
+  .clock { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+  .clock small { font-size: 13px; color: var(--dim); font-weight: 400; margin-left: 8px; }
+  .meters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 8px; }
+  .meter { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 8px; }
+  .meter .k { font-size: 12px; color: var(--dim); }
+  .meter .v { font-family: var(--mono); font-size: 20px; font-weight: 700; line-height: 1.4; }
+  .meter .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .meter .bar i { display: block; height: 100%; }
+  .state { font-size: 13px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 2px 16px; margin-bottom: 14px; }
+  .state b { color: var(--ink); font-weight: 500; }
+  /* 並び: PC は右に地図と記録。スマホは 絵 → 結果 → 地図と記録 → できること */
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "stage side" "live side" "acts side"; grid-template-rows: auto auto 1fr; column-gap: 16px; align-items: start; }
+  .g-stage { grid-area: stage; } .g-live { grid-area: live; } .g-acts { grid-area: acts; } .g-side { grid-area: side; }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; grid-template-areas: "stage" "live" "side" "acts"; grid-template-rows: none; }
+    .meters { grid-template-columns: repeat(2, 1fr); }
+    .tl-card { display: none; }
+    .notes-card ul { max-height: 240px; overflow: auto; }
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 20px; margin: 0 0 8px; line-height: 1.4; }
+  .when { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .log { font-family: var(--mono); font-size: 13px; background: #07090b; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 8px 0 12px; white-space: pre-wrap; color: #b9c4d0; }
+  .deltas { font-size: 13px; display: flex; gap: 4px 14px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+  .good { color: var(--good); } .bad { color: var(--bad); }
+  .notice { color: var(--warn); font-size: 14px; }
+  .event { border-color: var(--warn); }
+  .tag { font-size: 12px; letter-spacing: .08em; color: var(--warn); }
+  .choices { display: grid; gap: 8px; margin-top: 10px; }
+  button.ch { display: block; width: 100%; text-align: left; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 9px 12px; font: inherit; line-height: 1.5; cursor: pointer; }
+  button.ch:hover:not(:disabled), button.ch:focus-visible { border-color: var(--accent); outline: none; }
+  button.ch:disabled { opacity: .42; cursor: not-allowed; }
+  button.ch .cost { float: right; font-family: var(--mono); font-size: 13px; color: var(--accent); margin-left: 8px; }
+  button.ch .sub { display: block; font-size: 13px; color: var(--dim); }
+  .group h3 { font-size: 13px; color: var(--dim); margin: 14px 0 6px; letter-spacing: .06em; font-weight: 600; }
+  .group:first-child h3 { margin-top: 0; }
+  .side h3 { font-size: 14px; margin: 0 0 6px; }
+  .side ul { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+  .side li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .side li:last-child { border-bottom: 0; }
+  .side .empty { color: var(--dim); font-size: 13px; }
+  .primary { background: var(--accent); color: #06121f; border: 0; border-radius: 8px; padding: 12px 22px; font: inherit; font-weight: 700; cursor: pointer; }
+  .title { max-width: 820px; margin: 6vh auto 0; }
+  .title h1 { font-size: 32px; line-height: 1.3; margin: 4px 0 16px; }
+  .title ul { padding-left: 1.2em; color: var(--dim); }
+  .rankrow { display: flex; align-items: center; gap: 16px; margin: 6px 0 10px; }
+  .rank { font-family: var(--mono); font-size: 44px; font-weight: 800; border: 2px solid var(--accent); border-radius: 10px; width: 72px; text-align: center; line-height: 1.4; }
+  .card h3 { font-size: 15px; margin: 16px 0 6px; }
+  .card ul, .card ol { margin: 0; padding-left: 1.2em; }
+  .card li { margin-bottom: 4px; }
+  table.ans { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.ans th, table.ans td { text-align: left; border-bottom: 1px solid var(--line); padding: 6px 4px; vertical-align: top; }
+  table.ans th { color: var(--dim); font-weight: 500; white-space: nowrap; }
+  a { color: var(--accent); }
+  .fine { font-size: 13px; color: var(--dim); }
+
+  /* 場所の絵(行動・出来事ごとに切り替わる。夜明けに向かって少しずつ明るくなる) */
+  .stage { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px; aspect-ratio: 21 / 8; background: #05070a; }
+  .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(.9) brightness(calc(1 + .3 * var(--dawn, 0))); }
+  .stage.in img { animation: stageIn .7s ease both; }
+  .stage::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,7,10,0) 55%, rgba(5,7,10,.8)); }
+  .stage .cap { position: absolute; left: 14px; right: 14px; bottom: 8px; z-index: 1; display: flex; justify-content: space-between; font-size: 13px; color: #cfd6df; letter-spacing: .08em; }
+  .stage .cap b { font-weight: 600; }
+  .stage.big { aspect-ratio: 16 / 7; }
+  @keyframes stageIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+  @media (max-width: 760px) { .stage { aspect-ratio: 16 / 8; } }
+  @media (prefers-reduced-motion: reduce) { .stage.in img { animation: none; } }
+
+  /* 画面の中の「物」 */
+  .paper { position: relative; background: #e8e5de; color: #1a1a1a; font-family: var(--mono); font-size: 12px; line-height: 1.6; padding: 12px 14px; border-radius: 2px;
+    transform: rotate(-1.2deg); box-shadow: 4px 5px 0 #cdcac2, 8px 10px 0 #b3b0a8, 0 14px 30px rgba(0,0,0,.6); max-width: 440px; margin: 12px 4px 22px; white-space: pre-wrap; }
+  .paper b { letter-spacing: .04em; }
+  .paper .redact { background: #1a1a1a; color: #1a1a1a; border-radius: 1px; }
+  .call { display: flex; align-items: center; gap: 12px; background: #0c1116; border: 1px solid #2a3542; border-radius: 12px; padding: 10px 14px; margin: 10px 0 14px; max-width: 440px; }
+  .call .ring { width: 34px; height: 34px; border-radius: 50%; flex: none; border: 2px solid var(--good); position: relative; }
+  .call .ring::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--good); }
+  .call.in .ring { animation: ring 1.4s ease-out infinite; }
+  @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(63,207,142,.5); } 100% { box-shadow: 0 0 0 12px rgba(63,207,142,0); } }
+  .call .who { font-weight: 700; line-height: 1.3; }
+  .call .sub { font-size: 12px; color: var(--dim); }
+  .call .dir { margin-left: auto; font-size: 12px; color: var(--good); font-family: var(--mono); }
+  .mail { border: 1px solid var(--line); background: #0e1217; border-radius: 8px; margin: 10px 0 14px; max-width: 520px; font-size: 13px; }
+  .mail .mh { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--dim); }
+  .mail .mh b { color: var(--ink); font-weight: 600; }
+  .mail .mb { padding: 10px 12px; color: #c8d0da; }
+  .chat { border: 1px solid #4a2228; background: #0b0a0c; border-radius: 8px; margin: 10px 0 14px; max-width: 520px; font-size: 13px; }
+  .chat .ch-h { padding: 6px 12px; border-bottom: 1px solid #3a1a1f; color: #c88; font-family: var(--mono); font-size: 12px; }
+  .chat .bubble { margin: 10px 12px; background: #1d1114; border: 1px solid #4a2228; border-radius: 4px 12px 12px 12px; padding: 8px 12px; max-width: 90%; }
+  .chat .bubble .nm { display: block; font-family: var(--mono); font-size: 11px; color: var(--bad); }
+  .chat .att { margin: 0 12px 12px; font-size: 12px; color: var(--dim); }
+  .chat .rows { margin-top: 6px; display: grid; gap: 4px; }
+  .chat .rows i { display: block; height: 8px; background: #2b2b2b; border-radius: 1px; }
+  @media (prefers-reduced-motion: reduce) { .call.in .ring { animation: none; } }
+
+  /* 登場人物 */
+  .call .av { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex: none; border: 2px solid var(--good); }
+  .cast-h { font-size: 14px; color: var(--dim); margin: 22px 0 8px; font-weight: 600; letter-spacing: .06em; }
+  .cast { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+  .person { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; }
+  .person .ph { aspect-ratio: 4 / 3; background: #05070a; position: relative; display: grid; place-items: center; }
+  .person .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .person .ph span { font-family: var(--mono); font-size: 28px; color: #4a2228; }
+  .person .pn { font-weight: 700; font-size: 14px; padding: 6px 8px 0; }
+  .person .pr { color: var(--dim); padding: 0 8px; }
+  .person .pl { color: #b9c4d0; padding: 4px 8px 8px; line-height: 1.5; }
+  .person.unknown { border-color: #3a1f24; }
+  @media (max-width: 760px) { .cast { grid-template-columns: repeat(2, 1fr); } }
+
+  /* 見出しのボタン・はじめ方・遊び方 */
+  header.top .hbtns { display: flex; gap: 6px; margin-left: auto; margin-right: 12px; }
+  .hb { background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .hb:hover, .hb:focus-visible { color: var(--ink); border-color: var(--accent); outline: none; }
+  .ghost { background: transparent; border: 1px solid #3a4552; color: var(--ink); border-radius: 8px; padding: 10px 16px; font: inherit; cursor: pointer; }
+  .ghost:hover, .ghost:focus-visible { border-color: var(--accent); outline: none; }
+  .startrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 6px; }
+  .link { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 0 4px; text-decoration: underline; }
+  .guide { border-color: var(--accent); }
+  .guide .tag { color: var(--accent); }
+  .guide ol { margin: 6px 0 10px; padding-left: 1.3em; }
+  button.ch.small { width: auto; display: inline-block; padding: 6px 14px; }
+  .acts-h { font-weight: 700; margin-bottom: 6px; }
+  .notes-card summary { cursor: pointer; list-style: none; }
+  .notes-card summary::-webkit-details-marker { display: none; }
+  .notes-card summary h3 { display: inline-block; margin: 0; }
+  .notes-card summary::after { content: " ▾"; color: var(--dim); font-size: 12px; }
+  .notes-card[open] summary { margin-bottom: 6px; }
+
+  /* 用語の説明 */
+  .term { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline dotted var(--accent); text-underline-offset: 4px; cursor: help; }
+  #tip { position: fixed; z-index: 20; max-width: 290px; background: #0e1217; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.6; color: var(--ink); box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+  #tip b { display: block; color: var(--accent); }
+
+  /* 結果の共有と感想 */
+  .sharerow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .fb .q { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .segb { min-width: 44px; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  .segb.on { border-color: var(--accent); background: #12263a; }
+  .fb select, .fb textarea, dialog textarea { width: 100%; background: #0b0f14; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; max-width: 480px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 6px; }
+
+  /* 院内ネットの地図 */
+  .netmap svg { width: 100%; height: auto; display: block; }
+  .netmap .legend { font-size: 12px; color: var(--dim); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+"use strict";
+
+/* ==== ENGINE START ====
+   画面に触れない「ゲームの仕組み」。tools/sim.mjs がここだけを取り出して、自動で何百回も遊ばせる。
+   時刻 t は 0:00 からの分。0:24 に始まり、8:30(510分)の外来で終わる。 */
+
+const START = 24, END = 510;
+const METER = { spread: "広がり", patient: "患者への影響", trust: "信頼", evidence: "証拠" };
+// 数字が増えると悪いもの
+const WORSE_UP = { spread: true, patient: true };
+
+// 毎回ランダムに決まる「今夜の答え」
+const ANS = {
+  entry: { vpn: "VPN機器の古い弱点", vendor: "業者の保守用の接続（どの病院も同じパスワード）", mail: "職員に届いた偽の添付メール" },
+  backdoor: { admin: "新しく作られた管理者ID", tool: "サーバに常駐する遠隔操作の道具", task: "毎朝6時に動く予約された処理" },
+  backup: { lost: "院内の控えは、事件の前から暗号化されていた", online: "院内の控えは無事だった（院内ネットにつながったまま）", offline: "院内の控えは暗号化。金庫に1週間前の外付けディスク" },
+  exfil: { yes: "あり（約40GB）", no: "なし（盗んだというのは、はったり）" },
+};
+
+function clock(t) { const h = Math.floor(t / 60), m = t % 60; return "AM " + h + ":" + String(m).padStart(2, "0"); }
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function clamp(v) { return Math.max(0, Math.min(100, v)); }
+function add(g, k, v) { g.m[k] = clamp(g.m[k] + v); }
+function loseEvidence(g, v) { if (!g.preserved) add(g, "evidence", -v); }
+function note(g, text) { g.notes.push({ t: g.t, text }); }
+// 対応チームに電話していれば、手順を教わりながらなので調べものが早い
+function inv(g, base) { return g.ir.calledAt !== null ? Math.round(base * 0.75) : base; }
+
+function newGame(rng) {
+  const g = {
+    t: START,
+    hidden: {
+      entry: pick(rng, ["vpn", "vendor", "mail"]),
+      backdoor: pick(rng, ["admin", "tool", "task"]),
+      backup: pick(rng, ["lost", "online", "offline"]),
+      exfil: rng() < 0.5 ? "yes" : "no",
+    },
+    m: { spread: 10, patient: 0, trust: 50, evidence: 80 },
+    net: "open", // open: 全部つながっている / outsideCut: 外だけ切った / segmented: 部署ごとに分けた / off: 全部抜いた
+    serversOff: false, backupDetached: false, backupLostAt: null, backupKnown: null, backupSeen: null,
+    paperAt: null, paperReady: false, paperReadyAt: null,
+    ir: { calledAt: null, arriveAt: null, onsite: false },
+    director: false, police: false, pref: false, staffNotified: false, neighbor: false, preserved: false,
+    closed: { vpn: false, vendor: false, mail: false },
+    found: { admin: false, tool: false, task: false, mail: false },
+    removed: { admin: false, tool: false, task: false },
+    refReady: false, paidRecovery: false, paidRansom: false, egressKnown: false,
+    identified: false, // 侵入口を「使われた跡」で見抜いたか(塞いだだけとは別)
+    press: null, reconnect: null, outpatient: null,
+    used: {}, notes: [], timeline: [], queue: [], fired: {}, notices: [],
+    pending: null, pendingAt: null, ended: false, result: null,
+  };
+  if (g.hidden.backup === "lost") g.backupLostAt = 0;
+  g.last = {
+    h: "カルテが、ぜんぶ開かない",
+    lines: ["[病棟] 電子カルテ: 応答なし", "[事務] プリンタ: 英語の文書を印刷し続けている"],
+    text: "夜中の0時24分。三好看護師長から内線。「電子カルテが真っ赤な英語の画面になって、何も出せません。プリンタも止まらないんです」。\n\nプリンタから出てくる紙には、こうある。『おまえたちのファイルはすべて暗号化し、盗んだ。元に戻したければ、ここへ連絡しろ』。\n\nあなたはこの病院のシステムを、一人で見てきた。朝8時30分には外来が始まる。",
+    t0: START, t1: START, before: { ...g.m }, after: { ...g.m }, notices: [], place: "office", prop: { kind: "paper" },
+  };
+  return g;
+}
+
+/* ---- 時間を進める(1分ずつ) ---- */
+function tick(g, min) {
+  for (let i = 0; i < min && g.t < END; i++) {
+    g.t++;
+    let rate = { open: 14, outsideCut: 8, segmented: 2, off: 0 }[g.net];
+    if (g.serversOff) rate *= 0.35;
+    g.m.spread = clamp(g.m.spread + rate / 60);
+    // 院内ネットにつながったままの控えは、広がりが35%を超えると知らないうちにやられる
+    if (g.hidden.backup === "online" && g.backupLostAt === null && !g.backupDetached &&
+        g.m.spread >= 35 && (g.net === "open" || g.net === "outsideCut")) g.backupLostAt = g.t;
+    if (g.paperAt !== null && !g.paperReady && g.t >= g.paperAt) {
+      g.paperReady = true; g.paperReadyAt = g.t;
+      g.notices.push("紙での運用が整った(三好看護師長)"); note(g, "紙での運用が整った");
+    }
+    let p = g.paperReady ? 1 : 5;
+    if (g.net === "off") p += g.paperReady ? 1 : 4; // 院内の電話と検査機器も止まる
+    if (g.refReady) p *= 0.5;
+    g.m.patient = clamp(g.m.patient + p / 60);
+    if (g.ir.arriveAt !== null && !g.ir.onsite && g.t >= g.ir.arriveAt) { g.ir.onsite = true; g.queue.push({ id: "ir_arrive", t: g.t }); }
+    for (const ev of EVENTS) {
+      if (ev.at === undefined || g.fired[ev.id] || g.t < ev.at) continue;
+      g.fired[ev.id] = true;
+      if (!ev.when || ev.when(g)) g.queue.push({ id: ev.id, t: g.t });
+      else if (ev.onSkip) ev.onSkip(g);
+    }
+  }
+}
+
+/* ---- できること ---- */
+const ACTIONS = [
+  // 止める
+  { id: "cut_outside", group: "止める", label: "外との出入口(インターネットとVPN)を切る", note: "外から新しい命令が届かなくなる。院内の広がりは続く",
+    cost: () => 10, need: (g) => g.net === "open" ? null : "もう切ってある",
+    run(g) { g.net = "outsideCut";
+      return { h: "外との線を切った", lines: ["[FW] 外向きの通信: すべて遮断", "[VPN] 外からの接続: 停止"],
+        text: "これで外の誰かが、新しい命令を送ってくることはできない。ただ、院内で始まった暗号化は、院内の線を伝って、まだ広がっている。" }; } },
+  { id: "segment", place: "server", group: "止める", label: "院内ネットを部署ごとに切り分ける", note: "広がりをほぼ止める。院内の電話と検査機器は生きる。時間がかかる",
+    cost: (g) => g.ir.calledAt !== null ? 35 : 50, need: (g) => (g.net === "open" || g.net === "outsideCut") ? null : "もう線を切ってある",
+    run(g) { g.net = "segmented";
+      return { h: "院内を、島に分けた", lines: ["[NET] 部署ごとに切り分け: 11区画", "[NET] 外向き: 遮断"],
+        text: "病棟・検査・薬剤・事務を、別々の島にした。島を越えて広がることは、ほとんどなくなった。院内の電話と検査機器のつながりは生きている。" +
+          (g.ir.calledAt !== null ? "\n\n真壁さんの電話の指示で、どの線から切るか迷わずにすんだ。" : "") }; } },
+  { id: "unplug_all", place: "corridor", group: "止める", label: "院内の線を全部抜いて回る", note: "広がりは止まる。院内の電話と検査機器のつながりも止まる",
+    cost: () => 25, need: (g) => g.net === "off" ? "もう全部抜いてある" : null,
+    run(g) { g.net = "off";
+      return { h: "線を、全部抜いた", lines: ["[NET] 院内の線: すべて切断", "[TEL] 院内の電話: 不通", "[LAB] 検査機器のつながり: 停止"],
+        text: "広がりは止まった。そのかわり院内の電話がつながらず、検査の結果も機器の画面から直接読むしかない。" +
+          (g.paperReady ? "" : "\n\n紙の段取りがないまま、病棟と検査室のあいだを看護師が走り始めた。") }; } },
+  { id: "power_off", place: "server", group: "止める", label: "感染したサーバの電源を落とす", note: "サーバからの広がりが一気に弱まる。動いていたときの手がかりは消える",
+    cost: () => 10,
+    run(g) { g.serversOff = true; loseEvidence(g, 35);
+      return { h: "サーバの電源を落とした", lines: ["[SRV] 主要サーバ6台: 電源断"],
+        text: "サーバから出ていた広がりは、一気に弱まった。" +
+          (g.preserved ? "" : "\n\nただ、動いていたときのメモリの中身——犯人がいつ、何をしたかの手がかり——は、電源と一緒に消えた。") }; } },
+  { id: "detach_backup", place: "server", group: "止める", label: "バックアップ機の線を抜く", note: "これ以上、何も届かないようにする",
+    cost: () => 10,
+    run(g) { g.backupDetached = true;
+      return { h: "バックアップ機を切り離した", lines: ["[BK] バックアップ機: ネットから切り離し"],
+        text: "これ以上、何かが届くことはない。中身が無事かどうかは、まだ確かめていない。" }; } },
+
+  // 調べる
+  { id: "check_vpn", group: "調べる", label: "VPN機器の記録を見る", cost: (g) => inv(g, 30),
+    run(g) {
+      const hit = g.hidden.entry === "vpn";
+      if (hit) g.identified = true;
+      note(g, hit ? "VPN機器: 弱点あり。国外から管理者IDでの夜間ログインが続いていた" : "VPN機器: 弱点はあるが、使われた跡はない");
+      return { h: "VPN機器の記録", lines: ["[VPN] 機器のソフト: 2年前の版のまま(公表済みの弱点が未修正)",
+          hit ? "[VPN] 10/18 から毎晩2時台に、管理者IDでログイン。接続元は国外" : "[VPN] 不審なログイン: なし"],
+        text: hit ? "直されていない弱点が、実際に使われていた。" : "古いまま放っておかれた機器だ。ただ、今回それが使われた跡はない。" }; } },
+  { id: "call_vendor", prop: { kind: "call", dir: "発信", who: "ひまわり医療システム", sub: "夜間窓口" }, group: "調べる", label: "電子カルテの業者に、保守用の接続の記録を問い合わせる", note: "朝6時までは夜間窓口からの折り返しになる",
+    cost: (g) => g.t < 360 ? 40 : 20,
+    run(g) {
+      const hit = g.hidden.entry === "vendor";
+      if (hit) g.identified = true;
+      note(g, hit ? "業者の保守接続: 作業のない夜に、保守用IDで接続があった" : "業者の保守接続: 先週の定期作業だけ");
+      return { h: "業者からの折り返し", lines: ["[保守] 保守用のIDとパスワード: どの病院でも同じものを使用",
+          hit ? "[保守] 10/22 23:40 保守用IDで接続。業者側に、その夜の作業記録はない" : "[保守] 接続記録: 10/14 の定期作業のみ"],
+        text: hit ? "担当者は、しばらく言葉を失っていた。「その夜、うちは誰も作業していません」。" : "担当者は言った。「その後、うちからはつないでいません」。" }; } },
+  { id: "check_mail", group: "調べる", label: "職員あてのメールを調べる", cost: (g) => inv(g, 30),
+    run(g) {
+      const hit = g.hidden.entry === "mail";
+      if (hit) { g.found.mail = true; g.identified = true; }
+      note(g, hit ? "メール: 医事課あての偽の添付メールが、10/20に1件開かれている" : "メール: 怪しい添付は迷惑メールとして止まっていた");
+      return { h: "メールの記録", lines: [hit ? "[MAIL] 10/20 医事課あて『診療報酬改定のお知らせ』添付つき。開封: 1件" : "[MAIL] 添付つきの不審メール: 3件。すべて迷惑メールとして保留"],
+        text: hit ? "差出人は、取引のある団体の名前をかたっていた。" : "怪しいものは、届く前に止まっていた。" }; } },
+  { id: "check_server", group: "調べる", label: "サーバの記録から、最初に動いた端末を探す", cost: (g) => inv(g, 40),
+    run(g) {
+      // VPN の弱点も業者の保守接続も、同じ VPN 機器を通って入ってくる。ここだけでは見分けられない
+      const mail = g.hidden.entry === "mail";
+      if (mail) g.identified = true;
+      const first = mail ? "10/20、医事課のPC" : "VPN機器のすぐ内側の中継サーバ(" + (g.hidden.entry === "vpn" ? "10/18" : "10/22") + ")";
+      note(g, "サーバの記録: 最初の不審な動きは " + first + (mail ? "" : "。VPN機器を通って来ている"));
+      return { h: "最初に動いた場所", lines: ["[LOG] 最初の不審な動き: " + first, "[LOG] そこから管理者の権限で、ほかのサーバへ", "[LOG] 職員のPC: ほぼ全台に管理者の権限が付いている"],
+        text: mail ? "時間はかかったが、糸の端が見えた。" : "外から、VPN機器を通って入ってきている。ただ、VPN機器を通るのは、外の誰かだけではない。業者の保守の接続も、同じ機器を通る。" }; } },
+  { id: "check_admin", group: "調べる", label: "管理者IDの一覧を確かめる", cost: (g) => inv(g, 20),
+    run(g) {
+      const hit = g.hidden.backdoor === "admin";
+      if (hit) g.found.admin = true;
+      note(g, hit ? "裏口: 10/29に作られた、見覚えのない管理者ID『svc_bk02』がある" : "管理者ID: 見覚えのないものはない");
+      return { h: "管理者IDの一覧", lines: [hit ? "[ID] 10/29 作成: svc_bk02(管理者)。作った人の記録なし" : "[ID] 見覚えのない管理者ID: なし"],
+        text: hit ? "誰も覚えのない管理者が、一人増えていた。" : "一覧は、いつもどおりだった。" }; } },
+  { id: "check_process", place: (g) => g.ir.onsite ? "makabe" : "server", group: "調べる", label: "サーバで動いているものを洗い出す", note: "対応チームの道具を使う",
+    cost: (g) => g.ir.onsite ? 45 : 75, need: (g) => g.ir.calledAt !== null ? null : "対応チームの助けが要る",
+    run(g) {
+      const d = g.hidden.backdoor;
+      if (d === "tool") g.found.tool = true;
+      if (d === "task") g.found.task = true;
+      note(g, d === "tool" ? "裏口: 3台のサーバに、遠隔操作の道具が常駐している" : d === "task" ? "裏口: 毎朝6時に動く処理が、10/29に登録されている" : "常駐する道具・予約された処理: 不審なものはない");
+      return { h: "動いているもの", lines: [d === "tool" ? "[SCAN] 見覚えのない遠隔操作の道具: 3台のサーバで常駐" : d === "task" ? "[SCAN] 予約された処理: 毎朝6:00 に実行(10/29 登録)。中身は暗号化の再実行" : "[SCAN] 不審な常駐・予約: なし"],
+        text: g.ir.onsite ? "真壁さんのチームが、持ってきた道具で一台ずつ調べた。" : "電話の向こうの指示どおり、一台ずつ確かめていった。" }; } },
+  { id: "check_egress", group: "調べる", label: "外への通信の記録から、持ち出しを調べる", cost: (g) => inv(g, 30),
+    run(g) {
+      const hit = g.hidden.exfil === "yes";
+      g.egressKnown = true;
+      note(g, hit ? "持ち出し: あり。10/30深夜に約40GBが外へ" : "持ち出し: 大きな外向きの送信はない");
+      return { h: "外への通信", lines: [hit ? "[FW] 10/30 深夜: 外へ約40GBの送信。宛先は国外のファイル置き場" : "[FW] 大きな外向きの送信: なし"],
+        text: hit ? "盗んだというのは、本当だった。" : "大量に送り出した跡は見当たらない。" }; } },
+  { id: "check_backup", place: "server", group: "調べる", label: "バックアップ機の中身を確かめる", cost: () => 20,
+    run(g) {
+      g.backupKnown = true;
+      const b = g.hidden.backup;
+      g.backupSeen = b === "lost" || (b === "online" && g.backupLostAt !== null) ? "lost" : b === "offline" ? "old" : "safe";
+      if (b === "lost") {
+        note(g, "バックアップ: 院内の控えは暗号化されていた");
+        return { h: "バックアップ機", lines: ["[BK] ファイル: すべて暗号化", "[BK] 最後に書き換わったのは 10/31 0:05(事件の直前)"], text: "控えも、本番と同じネットにつながっていた。最初に狙われていた。" };
+      }
+      if (b === "offline") {
+        note(g, "バックアップ: 院内は全滅。ただし金庫に1週間前の外付けディスクがある");
+        return { h: "バックアップ機", lines: ["[BK] ファイル: すべて暗号化", "[記録] 運用メモ: 毎週金曜、外付けディスクを事務室の金庫へ。最新は 10/22"],
+          text: "院内の控えはやられていた。ただ、前任者が残した決まりごとが、金庫の中で生きていた。1週間前のものだ。" };
+      }
+      if (g.backupLostAt !== null) {
+        note(g, "バックアップ: " + clock(g.backupLostAt) + " に暗号化されていた");
+        return { h: "バックアップ機", lines: ["[BK] ファイル: すべて暗号化", "[BK] 最後に書き換わったのは " + clock(g.backupLostAt)],
+          text: clock(g.backupLostAt) + "——ついさっきまで、無事だった。" };
+      }
+      note(g, "バックアップ: 昨夜2時の控えまで無事" + (g.backupDetached ? "(切り離してある)" : "。院内ネットにつながったまま"));
+      return { h: "バックアップ機", lines: ["[BK] 昨夜 2:00 の控え: 無事", g.backupDetached ? "[BK] ネット: 切り離し済み" : "[BK] ネット: 院内とつながったまま"],
+        text: g.backupDetached ? "守れている。" :
+          (g.net === "segmented" || g.net === "off") ? "まだ無事だ。院内の線は切ってあるので、すぐには届かない。" :
+          "まだ無事だ。ただ、院内の線がつながっている限り、いつ届いてもおかしくない。" };
+    } },
+  { id: "preserve", place: (g) => g.ir.onsite ? "makabe" : "server", group: "調べる", label: "証拠を保全する(メモリとディスクの写しを取る)", note: "後から、いつ何が起きたかを確かめられる",
+    cost: (g) => g.ir.onsite ? 60 : 100, need: (g) => g.ir.calledAt !== null ? null : "対応チームの助けが要る",
+    run(g) {
+      const memGone = g.serversOff;
+      g.preserved = true; add(g, "evidence", memGone ? 3 : 12);
+      note(g, "証拠を保全した" + (memGone ? "(電源を落としたサーバはディスクだけ)" : ""));
+      return { h: "証拠を残した", lines: [memGone ? "[IR] メモリの写し: 取れず(電源断)" : "[IR] 主要サーバのメモリの写し: 確保", "[IR] ディスクの写し: 確保"],
+        text: (g.ir.onsite ? "真壁さんのチームが、主要サーバの中身を写し取った。" : "電話越しに一つずつ教わりながら、自分の手で写しを取った。") +
+          (memGone ? "電源を落としたサーバは、ディスクしか写せなかった。" : "これで、いつ何が起きたかを後から確かめられる。") }; } },
+
+  // 塞ぐ・消す
+  { id: "close_vpn", group: "塞ぐ・消す", label: "VPN機器を止める(直すまで使わない)", note: "業者の遠隔の保守も、在宅の医師の接続も止まる", cost: () => 15,
+    run(g) { g.closed.vpn = true;
+      return { h: "VPN機器を止めた", lines: ["[VPN] 機器: 停止(更新まで使用しない)"], text: "古いままの機器は、直すまで眠らせる。" }; } },
+  { id: "close_vendor", group: "塞ぐ・消す", label: "業者の保守用IDを止め、パスワードを変える", cost: () => 20,
+    run(g) { g.closed.vendor = true;
+      return { h: "保守用の入口を閉じた", lines: ["[保守] 保守用ID: 停止", "[保守] パスワード: 病院だけのものに変更"], text: "どの病院でも同じだった鍵を、ここだけのものに替えた。" }; } },
+  { id: "close_mail", group: "塞ぐ・消す", label: "偽メールを全職員に知らせ、開いたPCを切り離す", cost: () => 20, show: (g) => g.found.mail,
+    run(g) { g.closed.mail = true;
+      return { h: "偽メールの入口を閉じた", lines: ["[MAIL] 同じ差出人・件名: 全職員あてに注意を配信", "[NET] 医事課のPC: 切り離し"], text: "開かれたのは1通。そこから始まっていた。" }; } },
+  { id: "rm_admin", group: "塞ぐ・消す", label: "見覚えのない管理者IDを止め、全管理者のパスワードを変える", cost: () => 15, show: (g) => g.found.admin,
+    run(g) { g.removed.admin = true;
+      return { h: "見知らぬ管理者を消した", lines: ["[ID] svc_bk02: 停止", "[ID] 管理者IDのパスワード: すべて変更"], text: "これで、あの合鍵は使えない。" }; } },
+  { id: "rm_tool", place: "server", group: "塞ぐ・消す", label: "道具が入ったサーバ3台を切り離し、作り直しに回す", cost: () => 40, show: (g) => g.found.tool,
+    need: (g) => g.ir.onsite ? null : "対応チームの到着が要る",
+    run(g) { g.removed.tool = true; loseEvidence(g, 15);
+      return { h: "裏口の道具を断った", lines: ["[SRV] 3台: 切り離し → 作り直しへ"], text: "道具ごと、サーバを入れ替えることにした。" + (g.preserved ? "" : "写しを取る前だったので、中の手がかりは一部失われた。") }; } },
+  { id: "rm_task", place: "server", group: "塞ぐ・消す", label: "予約された不審な処理を消す", cost: () => 15, show: (g) => g.found.task,
+    run(g) { g.removed.task = true;
+      return { h: "時限の仕掛けを外した", lines: ["[SCHED] 毎朝6:00 の処理: 削除"], text: "毎朝6時の仕掛けは、もう動かない。" }; } },
+  { id: "restore_ref", place: "server", group: "塞ぐ・消す", label: "無事な控えから、ネットにつながない1台でカルテを見られるようにする", note: "朝の外来がずっと楽になる",
+    cost: () => 90, show: (g) => g.backupKnown && g.hidden.backup !== "lost",
+    need: (g) => g.ir.onsite ? null : "対応チームの到着が要る",
+    run(g) {
+      if (g.hidden.backup === "online" && g.backupLostAt !== null) {
+        g.backupSeen = "lost";
+        note(g, "バックアップ: 戻そうとしたら暗号化されていた(" + clock(g.backupLostAt) + ")");
+        return { h: "戻せなかった", lines: ["[BK] ファイル: すべて暗号化", "[BK] 最後に書き換わったのは " + clock(g.backupLostAt)],
+          text: "確かめたときは無事だった控えが、" + clock(g.backupLostAt) + "にやられていた。線が、まだつながっていた。" };
+      }
+      g.refReady = true;
+      return { h: "過去のカルテが、一台だけ戻った", lines: ["[REF] 参照用PC: ネットから隔離して復元", "[REF] 過去のカルテと薬の記録: 閲覧可"],
+        text: "最新ではないが、過去のカルテと薬の記録は引ける。外来の受付に置いた。" }; } },
+
+  // 呼ぶ・伝える
+  { id: "call_ir", prop: { kind: "call", dir: "発信", who: "ブルーライン社 真壁さん", sub: "事件対応チーム", p: "makabe" }, group: "呼ぶ・伝える", label: "外部の事件対応チームに電話する", note: "到着は3時間後。それまでは電話で手伝ってくれる", cost: () => 10,
+    run(g) { g.ir.calledAt = g.t; g.ir.arriveAt = g.t + 180;
+      note(g, "対応チームが " + clock(g.ir.arriveAt) + " ごろ到着");
+      return { h: "対応チームにつながった", lines: ["[TEL] ブルーライン社 事件対応窓口: 接続"],
+        text: "夜間窓口から、担当の真壁さんに回された。「わかりました。車で向かいます。着くのは " + clock(g.ir.arriveAt) + " ごろ。それまでは電話で一緒にやりましょう」。\n\n「まず、電源は落とさないで。手がかりが消えます。線を抜くなら、外との出入口と、バックアップ機を先に」。" }; } },
+  { id: "wake_director", prop: { kind: "call", dir: "発信", who: "立花院長", sub: "自宅", p: "tachibana" }, group: "呼ぶ・伝える", label: "院長を起こして報告する", note: "院長の判断が要ることができるようになる", cost: () => 15,
+    run(g) { g.director = true; add(g, "trust", 2);
+      return { h: "院長を起こした", lines: ["[TEL] 立花院長: 自宅"],
+        text: "立花院長は、電話口で長く黙った。「……わかった。すぐ行く。ただ、朝の外来は止めたくない。町で病院は、うちだけなんだ」。" }; } },
+  { id: "paper", place: "miyoshi", prop: { kind: "call", dir: "内線", who: "三好看護師長", sub: "3階病棟", p: "miyoshi" }, group: "呼ぶ・伝える", label: "看護師長に、紙での運用の準備を頼む", note: "1時間半後に整う", cost: () => 5,
+    run(g) { g.paperAt = g.t + 90; note(g, "紙での運用を頼んだ(" + clock(g.paperAt) + " ごろ整う)");
+      return { h: "紙で回す準備", lines: [], text: "三好看護師長は即答した。「災害訓練のときの紙の様式があります。1時間半ください」。" }; } },
+  { id: "police", prop: { kind: "call", dir: "発信", who: "県警 サイバー犯罪対策課", sub: "相談窓口" }, group: "呼ぶ・伝える", label: "警察(サイバー犯罪の相談窓口)に通報する", cost: () => 15,
+    run(g) { g.police = true; add(g, "trust", 4);
+      return { h: "警察に通報した", lines: ["[TEL] 県警 サイバー犯罪対策課"],
+        text: "「脅迫文は捨てずに残してください。犯人と連絡を取る前に、必ず相談を」。" }; } },
+  { id: "report_pref", prop: { kind: "call", dir: "発信", who: "県 医療政策課", sub: "夜間の連絡先" }, group: "呼ぶ・伝える", label: "県と厚生労働省に報告する", cost: () => 15, need: (g) => g.director ? null : "院長の判断が要る",
+    run(g) { g.pref = true; add(g, "trust", 4);
+      return { h: "県と国に報告した", lines: [], text: "院長の名前で、第一報を入れた。県の担当者が、朝いちばんに来ると言った。" }; } },
+  { id: "notify_staff", prop: { kind: "call", dir: "一斉連絡", who: "全職員", sub: "連絡網" }, group: "呼ぶ・伝える", label: "全職員に「出勤してもPCをつけない」と連絡する", cost: () => 10,
+    run(g) { g.staffNotified = true; add(g, "trust", 2);
+      return { h: "職員に連絡した", lines: [], text: "連絡網で全職員へ。出勤してもPCをつけない、USBを挿さない、仕事は三好看護師長の指示で紙に。" }; } },
+  { id: "neighbor", prop: { kind: "call", dir: "発信", who: "隣町の総合病院", sub: "地域連携室" }, group: "呼ぶ・伝える", label: "近くの病院に、急患と外来の受け入れを頼む", cost: () => 25, need: (g) => g.director ? null : "院長の判断が要る",
+    run(g) { g.neighbor = true;
+      return { h: "近くの病院に頼んだ", lines: [], text: "隣町の総合病院と県立病院の窓口に電話した。急患と、新しい外来患者の一部を受けてもらえることになった。" }; } },
+
+  // 待つ
+  { id: "wait", group: "待つ", label: "30分、様子を見る", repeat: true, cost: (g) => Math.min(30, END - g.t),
+    run(g) { return { h: "様子を見た", lines: [], text: "画面の前で、時間だけが過ぎた。" }; } },
+];
+const ACT = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
+
+/* ---- 時刻で起きる出来事 ---- */
+const EVENTS = [
+  { id: "ambulance", place: "oka", prop: (g) => ({ kind: "call", dir: "内線", who: "当直 岡先生", sub: "救急外来", p: "oka" }),  at: 110, h: () => "救急車が向かっている",
+    text: () => "当直の岡先生から内線。「70代の男性、胸の痛み。あと15分で着く。検査の結果も、前のカルテも見られない。受ける？」",
+    choices: () => [
+      { label: "受け入れる(紙と手作業で)", run(g) {
+        if (g.paperReady) { add(g, "patient", 1); add(g, "trust", 3); return { text: "三好さんの紙の様式で、受け入れは滞りなく進んだ。検査の数値は、機器の画面から書き写した。" }; }
+        add(g, "patient", g.net === "off" ? 10 : 8); add(g, "trust", 1);
+        return { text: "記録の段取りがないまま受け入れた。検査の手配が手探りになり、処置まで時間がかかった。患者は持ちこたえたが、病棟は混乱した。" }; } },
+      { label: "近くの病院に回してもらう", run(g) { add(g, "patient", 3); add(g, "trust", -2);
+        return { text: "救急隊に事情を伝え、隣町の病院へ回ってもらった。着くのは30分遅れる。" }; } },
+    ] },
+  { id: "ir_arrive", place: "makabe", h: () => "対応チームが着いた",
+    text: (g) => {
+      let s = "ブルーライン社の真壁さんが、ノートPCと機材の箱を抱えて入ってきた。「状況を見せてください」。";
+      if (g.serversOff && !g.preserved) s += "\n\n「電源、落としたんですね……。メモリの中の手がかりは、もう戻りません」。";
+      else if (g.net === "open") s += "\n\n「まだ外とつながってる？　まず外との出入口を切りましょう」。";
+      if (!g.backupKnown) s += "\n\n「バックアップは確かめました？　犯人が先に狙うのは、たいていそこです」。";
+      return s; },
+    choices: () => [{ label: "始めましょう", run: () => ({ text: "ここからは、調べものと証拠の保全が早く進む。" }) }] },
+  { id: "briefing", place: "tachibana",  at: 180, when: (g) => g.director, h: () => "院長が事務室に来た",
+    text: () => "立花院長が、コートのまま事務室に入ってきた。「町長と県に、何と言えばいい。いま、どうなってる。全部説明してくれ」。",
+    choices: () => [
+      { label: "時間を取って、全部説明する", cost: 20, run(g) { add(g, "trust", 3);
+        return { text: "分かっていること、分かっていないこと、これからやることを順に話した。院長はうなずき、町長への電話は自分がかけると言った。" }; } },
+      { label: "要点だけ伝えて、作業に戻る", cost: 5, run(g) { add(g, "trust", -2);
+        return { text: "「あとで、ちゃんと聞かせてくれ」。院長は不満そうに出ていった。" }; } },
+    ] },
+  { id: "recovery", place: "office", prop: () => ({ kind: "mail", from: "info@****-data.jp", subject: "【至急】暗号化されたデータを復元いたします" }),  at: 240, h: () => "「戻せます」というメール",
+    text: () => "病院の代表アドレスに、メールが届いた。この事件を、どこで知ったのかは書かれていない。",
+    choices: () => [
+      { label: "頼む(院長の判断)", need: (g) => g.director ? null : "院長を起こしていない", run(g) { g.paidRecovery = true;
+        return { text: "院長は「戻るなら」とうなずいた。会社からは「3日ください」とだけ返ってきた。" }; } },
+      { label: "警察に相談してから決める", need: (g) => g.police ? null : "警察に通報していない", cost: 15, run(g) { add(g, "trust", 1);
+        note(g, "警察: 復元会社が、裏で犯人に払っている例がある");
+        return { text: "サイバー犯罪対策課の担当者は言った。「こうした会社が、裏で犯人に身代金を払っている例があります。頼めば、払うのと同じことになりかねません」。頼むのはやめた。" }; } },
+      { label: "返事をしない", run: () => ({ text: "メールは、そのままにした。" }) },
+    ] },
+  // 対応チームがいれば連絡先のチャットを見張っている。いなければプリンタから紙が出てくる
+  { id: "threat", place: "office",
+    prop: (g) => g.ir.calledAt !== null ? { kind: "chat", exfil: g.hidden.exfil === "yes" } : { kind: "paper", variant: "threat", exfil: g.hidden.exfil === "yes" },
+    at: 300, h: () => "相手からの知らせ",
+    text: (g) => g.ir.calledAt !== null ? "真壁さんが、脅迫文にあった連絡先を見張っていた。新しい書き込みがある。" :
+      "プリンタから、新しい紙が一枚出てきた。『48時間以内に連絡がなければ、盗んだ患者のデータを公開する』。" +
+      (g.hidden.exfil === "yes" ? "患者の名前と病名が並んだ一覧の一部が、印刷されている。" : "盗んだという証拠は、付いていない。"),
+    choices: () => [
+      { label: "返事をしない", run: () => ({ text: "相手には、何も返さなかった。" }) },
+      { label: "時間を稼ぐ返事をする(警察と対応チームに相談しながら)", need: (g) => (g.police && g.ir.calledAt !== null) ? null : "警察と対応チームの両方が要る", cost: 20,
+        run(g) { g.egressKnown = true;
+          if (g.hidden.exfil === "yes") { note(g, "持ち出し: 相手が盗んだファイルの一覧を送ってきた。本当に盗まれている");
+            return { text: "「本当に盗んだのか」と返すと、相手はファイルの一覧を送ってきた。日付も件数も、病院のものと合う。" }; }
+          note(g, "持ち出し: 証拠を求めると、相手は話をそらした。はったりの可能性が高い");
+          return { text: "「本当に盗んだのか」と返すと、相手は「払えば分かる」とだけ書いてきた。証拠は出てこない。" }; } },
+      { label: "支払う方向で相談する(院長の判断)", need: (g) => g.director ? null : "院長を起こしていない",
+        run(g) { g.paidRansom = true; return { text: "院長は長く迷ったすえ、うなずいた。支払いの手配には、数日かかる。" }; } },
+    ] },
+  { id: "pharmacy", place: "pharmacy", prop: () => ({ kind: "call", dir: "内線", who: "薬剤部 当直", sub: "1階 薬剤部" }),  at: 330, h: () => "薬剤部から内線",
+    text: () => "薬剤部の当直から。「朝の薬の準備ができません。払い出しの端末が使えない。入院患者さん80人分、どう出せばいいですか」。",
+    choices: () => [
+      { label: "薬剤部に行って、一緒に段取りを組む", cost: 30, run(g) { add(g, "patient", g.paperReady ? -2 : -5); add(g, "trust", 1);
+        return { text: "前日の処方の控えを紙で突き合わせ、二人一組で確かめながら出す手順にした。朝の配薬には間に合いそうだ。" }; } },
+      { label: "紙の運用に任せる", run(g) { add(g, "patient", g.paperReady ? 1 : 6);
+        return { text: g.paperReady ? "三好さんの紙の運用に、薬の確認も組み込んでもらった。" : "紙の段取りがないまま、薬剤部は手探りで準備を始めた。朝の配薬は遅れそうだ。" }; } },
+    ] },
+  { id: "task6", place: "server",  at: 360, when: (g) => g.hidden.backdoor === "task" && !g.removed.task && g.net !== "off",
+    h: () => "6時、また動き出した", text: () => "止まりかけていた暗号化が、別のサーバで再び始まった。毎朝6時に動くよう、何かが仕込まれていたらしい。",
+    choices: () => [{ label: "急いで止める", run(g) { add(g, "spread", 12); g.found.task = true; note(g, "裏口: 毎朝6時に動く予約された処理がある");
+      return { text: "広がりが一気に進んだ。仕掛けの場所は分かった。" }; } }] },
+  { id: "director", place: "tachibana",  at: 390, when: (g) => !g.director, h: () => "院長が来た",
+    text: () => "立花院長が出勤してきた。事務室の様子を見て、低い声で言った。「なぜ、すぐに起こさなかった」。",
+    choices: () => [{ label: "これまでのことを報告する", cost: 10, run(g) { g.director = true; add(g, "trust", -4);
+      return { text: "院長は黙って聞いていた。院長の判断が要ることが、ここからできる。" }; } }] },
+  { id: "staff", place: "office",  at: 420, when: (g) => !g.staffNotified,
+    onSkip: (g) => g.notices.push("7時、出勤した職員は連絡どおりPCに触れず、紙の仕事に回っていった"),
+    h: () => "職員がPCをつけ始めた",
+    text: () => "出勤してきた職員が、いつものようにPCの電源を入れ、動くかどうか試している。",
+    choices: () => [
+      { label: "すぐに止めて回る", cost: 15, run(g) { if (g.net !== "off") add(g, "spread", 3); loseEvidence(g, 4);
+        return { text: "事務室と医局を走って回り、線を抜いてもらった。何台かは、もうつながっていた。" }; } },
+      { label: "そのままにする", run(g) { if (g.net !== "off") add(g, "spread", 10); loseEvidence(g, 10);
+        return { text: "止める余裕がなかった。つけたPCの何台かが、そのまま暗号化された。" }; } },
+    ] },
+  { id: "press", place: "office", prop: () => ({ kind: "call", dir: "着信", who: "さくら新報", sub: "社会部 記者" }),  at: 450, h: () => "新聞社からの電話",
+    text: () => "さくら新報の記者から電話。「病院のシステムが止まっていると聞きました。本当ですか」。",
+    choices: () => [
+      { label: "分かっていることを伝え、昼に説明すると約束する(院長の判断)", need: (g) => g.director ? null : "院長を起こしていない",
+        run(g) { g.press = "honest"; add(g, "trust", g.police ? 10 : 7); return { text: "院長の名前で、分かっていることと、まだ分からないことを伝えた。昼に説明の場を開く。" }; } },
+      { label: "「確認中です」とだけ答える", run(g) { g.press = "hold"; add(g, "trust", -2); return { text: "記者は「また電話します」と言って切った。" }; } },
+      { label: "「通常どおり診療しています」と答える", run(g) { g.press = "deny"; add(g, "trust", -2); return { text: "記者は少し間をおいて、「分かりました」と言った。" }; } },
+    ] },
+  { id: "morning", place: "waiting", prop: () => ({ kind: "call", dir: "着信", who: "ひまわり医療システム", sub: "保守担当" }),  at: END, h: () => "朝8時30分",
+    text: () => "ひまわり医療システムの担当者から電話。「遠隔で復旧作業を始めたいので、外との出入口をつないでもらえますか。そのほうが、ずっと早く直せます」。",
+    choices: () => [
+      { label: "つなぐ", run(g) { g.reconnect = true; return { text: "業者の作業のために、外との出入口を開けた。", next: "outpatient" }; } },
+      { label: "断って、来てもらう", run(g) { g.reconnect = false; return { text: "業者には病院まで来てもらう。着くのは昼すぎになる。", next: "outpatient" }; } },
+    ] },
+  { id: "outpatient", place: "waiting",  final: true, h: () => "外来の扉",
+    text: (g) => "待合室には、もう人が並び始めている。" + (g.paperReady ? "紙の受付票は用意できている。" : "紙の段取りは、まだない。") + (g.refReady ? "受付には、過去のカルテを引ける1台がある。" : ""),
+    choices: () => [
+      { label: "いつもどおり外来を開く(紙で)", run(g) { g.outpatient = "open";
+        if (g.paperReady) { add(g, "patient", g.refReady ? 3 : 8); add(g, "trust", 3); return { text: "時間はかかったが、外来は回った。" }; }
+        add(g, "patient", 28); add(g, "trust", -8); return { text: "受付で名前を聞き、手で書き、また聞き直す。待ち時間は4時間を超えた。" }; } },
+      { label: "外来を縮め、急患と予約の再診だけにする(院長の判断)", need: (g) => g.director ? null : "院長の判断が要る",
+        run(g) { g.outpatient = "reduce"; add(g, "patient", g.paperReady ? 5 : 14); return { text: "新しい患者には、事情を話して日を改めてもらった。" }; } },
+      { label: "新しい患者の受け入れを止め、近くの病院に回す(院長の判断)", need: (g) => g.director ? null : "院長の判断が要る",
+        run(g) { g.outpatient = "stop"; add(g, "patient", g.neighbor ? 4 : 14); add(g, "trust", g.neighbor ? -2 : -6);
+          return { text: g.neighbor ? "前もって頼んでおいた病院へ、患者を案内した。" : "受け入れ先の段取りがないまま、患者を帰すことになった。" }; } },
+    ] },
+];
+const EV = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+
+/* ---- 操作 ---- */
+function placeOf(x, g) { return typeof x.place === "function" ? x.place(g) : (x.place || "office"); }
+function avail(g, a) {
+  if (!a.repeat && g.used[a.id]) return { ok: false, why: "済" };
+  if (!a.repeat && a.cost(g) > END - g.t) return { ok: false, why: "外来までに終わらない" };
+  const why = a.need ? a.need(g) : null;
+  return why ? { ok: false, why } : { ok: true };
+}
+function visibleActions(g) {
+  return ACTIONS.filter((a) => (!a.show || a.show(g)) && (a.repeat || !g.used[a.id]));
+}
+// 出来事は、起きる直前の状況でもう一度確かめる(院長を起こしている途中に「院長が来た」が出ないように)
+// 消去法でも見抜ける: 入口がVPN機器の先と分かり、片方に跡がなければ、もう片方
+function deduce(g) {
+  const e = g.hidden.entry;
+  if (g.used.check_server && e !== "mail" &&
+      ((e === "vendor" && g.used.check_vpn) || (e === "vpn" && g.used.call_vendor))) g.identified = true;
+}
+function advance(g) {
+  while (!g.pending && g.queue.length) {
+    const q = g.queue.shift(), ev = EV[q.id];
+    if (ev.when && !ev.when(g)) { if (ev.onSkip) ev.onSkip(g); continue; }
+    g.pending = ev.id; g.pendingAt = q.t;
+  }
+}
+function doAction(g, id) {
+  const a = ACT[id];
+  if (g.pending || g.ended || !a || !avail(g, a).ok) return false;
+  const before = { ...g.m }, t0 = g.t, cost = a.cost(g);
+  g.used[id] = (g.used[id] || 0) + 1;
+  const entry = { t: t0, id, label: a.label };
+  g.timeline.push(entry);
+  tick(g, cost);
+  entry.t1 = g.t;
+  const out = a.run(g) || {};
+  deduce(g);
+  advance(g);
+  g.last = { h: out.h || a.label, lines: out.lines || [], text: out.text || "", t0, t1: g.t, before, after: { ...g.m }, notices: g.notices.splice(0),
+    place: placeOf(a, g), prop: a.prop || null };
+  return true;
+}
+function eventChoices(g) {
+  return g.pending ? EV[g.pending].choices(g) : [];
+}
+function chooseEvent(g, i) {
+  if (!g.pending || g.ended) return false;
+  const ev = EV[g.pending], c = ev.choices(g)[i];
+  if (!c || (c.need && c.need(g))) return false;
+  const before = { ...g.m }, t0 = g.t, h = ev.h(g);
+  g.timeline.push({ t: g.pendingAt ?? t0, t1: t0, id: "ev:" + ev.id, label: h + " → " + c.label });
+  if (c.cost) tick(g, c.cost);
+  const res = c.run(g) || {};
+  g.pending = res.next || null;
+  g.pendingAt = g.pending ? g.t : null;
+  if (ev.final) finish(g);
+  else advance(g);
+  g.last = { h, lines: [], text: res.text || "", t0, t1: g.t, before, after: { ...g.m }, notices: g.notices.splice(0), choice: c.label,
+    place: placeOf(ev, g), prop: null };
+  return true;
+}
+
+/* ---- 結末 ---- */
+function finish(g) {
+  const H = g.hidden;
+  const entryOK = g.closed[H.entry], doorOK = g.removed[H.backdoor];
+  const backupSaved = H.backup === "offline" || (H.backup === "online" && g.backupLostAt === null);
+  const reinfect = g.reconnect === true && !(entryOK && doorOK);
+  const epi = [];
+  let weeks = backupSaved ? (H.backup === "offline" ? 5 : 3) : 9;
+  if (reinfect) {
+    weeks += 4; add(g, "trust", -10); add(g, "patient", 8);
+    epi.push("つないで2時間後、同じ文面が、またプリンタから流れ始めた。" + (!entryOK ? "侵入口が" : "裏口が") + "、まだ開いていた。");
+  } else if (g.reconnect) {
+    weeks -= 1; epi.push("業者は遠隔で作業を始め、復旧は少し早まった。入口も裏口も塞いであったので、何も戻ってこなかった。");
+  }
+  if (g.paidRansom) {
+    if (!backupSaved) weeks -= 2;
+    add(g, "trust", -12);
+    epi.push("支払いの数日後に届いた鍵で戻せたのは、一部だけだった。" + (H.exfil === "no" ? "盗んだというのは、はったりだった。" : "") + "病院が犯人に払ったことは、町の議会で問題になった。");
+  }
+  if (g.paidRecovery) {
+    if (!backupSaved) weeks -= 3;
+    add(g, "trust", -8);
+    epi.push("復元会社は、約束どおりデータの一部を戻してきた。4,000万円の行き先は、最後まで明かされなかった。");
+  }
+  if (H.exfil === "yes") {
+    if (g.press === "honest" || g.pref) { add(g, "trust", -2); epi.push("1週間後、盗まれた患者の情報の一部がネットに出た。病院は先に公表し、相談の窓口を開いていた。"); }
+    else { add(g, "trust", -10); epi.push("1週間後、盗まれた患者の情報の一部がネットに出た。患者の多くは、それを報道で知った。"); }
+  }
+  if (g.press === "deny") { add(g, "trust", -10); epi.push("「通常どおり診療」と書かれた記事が出た日の昼、外来の混乱がテレビに映った。"); }
+  if (g.preserved && g.m.evidence >= 60) epi.push("残した記録から、侵入の経路と時刻を報告書に書けた。警察の捜査も進んだ。");
+  else if (g.m.evidence < 45) epi.push("記録の多くが失われ、報告書の侵入経路は「推定」と書くしかなかった。");
+  weeks = Math.max(1, weeks);
+  epi.unshift("主な診療がITで元に戻るまで、約" + weeks + "週間。" +
+    (backupSaved ? (H.backup === "offline" ? "金庫にあった1週間前の控えから戻し、抜けた1週間は紙から打ち直した。" : "守った控えから戻せた。") : "控えがなく、システムを作り直した。"));
+
+  // 点数は内訳つき(ふりかえり会で見せる)
+  const m = g.m, f = (x) => Math.max(0, Math.min(1, x));
+  const parts = [
+    ["患者を守る", 35, 35 * f(1 - m.patient / 80)],
+    ["広がりを止める", 15, 15 * f(1 - m.spread / 100)],
+    ["信頼", 20, 20 * f((m.trust - 20) / 70)],
+    ["証拠を残す", 10, 10 * f((m.evidence - 20) / 70)],
+    ["見抜く", 20, (entryOK ? (g.identified ? 8 : 3) : 0) + (doorOK ? 8 : 0) + (backupSaved || (H.backup === "lost" && g.backupKnown) ? 4 : 0)],
+  ];
+  const minus = [];
+  if (reinfect) minus.push(["戻ってきた", -25]);
+  if (g.paidRansom) minus.push(["身代金を払った", -10]);
+  if (g.paidRecovery) minus.push(["正体の分からない会社に払った", -5]);
+  let score = parts.reduce((s, p) => s + p[2], 0) + minus.reduce((s, p) => s + p[1], 0);
+  score = Math.round(Math.max(0, Math.min(100, score)));
+  const rank = score >= 80 ? "S" : score >= 65 ? "A" : score >= 45 ? "B" : "C";
+  const title = reinfect ? "戻ってきた" : { S: "朝、病院は開いた", A: "紙とひとの手で、踏みとどまった", B: "傷を負って、朝が来た", C: "長い冬が始まる" }[rank];
+  g.result = { score, rank, title, weeks, epi, entryOK, doorOK, backupSaved, reinfect, parts, minus };
+  g.ended = true;
+  g.pending = null;
+}
+
+/* ==== ENGINE END ==== */
+
+/* ====== 画面 ====== */
+const CONFIG = {
+  version: "0.4",
+  // 公開URL。決まったら入れる(結果の共有文に付く)
+  url: "",
+  // 感想と利用状況の送り先(Googleフォーム)。tools/make-form.gs を実行すると出る値をそのまま入れる。null のあいだは何も送らない
+  form: null,
+};
+const app = document.getElementById("app");
+let G = null;
+let FB = {};               // 結末の感想フォームで選んだ値
+let lastEventShown = null; // 同じ出来事で音を二度鳴らさない
+
+/* --- 端末に残すもの: 途中の続き・遊んだ回数・設定 --- */
+const SAVE_KEY = "iz_night_save_v1", STATS_KEY = "iz_night_stats_v1";
+function load(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function store(key, v) { try { if (v === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* 保存できなくても遊べる */ } }
+const STATS = Object.assign({ plays: 0, finished: 0, best: null, guideSeen: false, sound: true, telemetry: true }, load(STATS_KEY) || {});
+function saveStats() { store(STATS_KEY, STATS); }
+function saveGame() { store(SAVE_KEY, G && !G.ended ? G : null); }
+function savedGame() { const s = load(SAVE_KEY); return s && !s.ended && s.hidden && typeof s.t === "number" ? s : null; }
+
+/* --- 感想と利用状況(匿名)。Googleフォームの回答として送る --- */
+const ENTRY_KEYS = ["kind", "sid", "ver", "clock", "steps", "rank", "score", "ending", "answers", "fun", "again", "stuck", "comment", "device", "plays", "elapsed", "src"];
+// どこから来たか(リンクに付けた ?src=note_o04 など)。英数字と _ - だけを残す
+const SRC = (new URLSearchParams(location.search).get("src") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+function isNarrow() { return window.matchMedia && window.matchMedia("(max-width: 760px)").matches; }
+function elapsedSec() { return G && G.startedAt ? Math.round((Date.now() - G.startedAt) / 1000) : ""; }
+function send(kind, data) {
+  if (!CONFIG.form) return false;
+  // 利用状況は「送らない」を選んだ人からは送らない。感想は本人が送るボタンを押したときだけ
+  if (!STATS.telemetry && kind !== "feedback" && kind !== "comment") return false;
+  const all = Object.assign({ kind, sid: G ? G.sid : "", ver: CONFIG.version, device: isNarrow() ? "スマホ" : "PC", plays: STATS.plays, src: SRC }, data || {});
+  const body = new URLSearchParams();
+  for (const k of ENTRY_KEYS) {
+    if (all[k] !== undefined && all[k] !== null && all[k] !== "" && CONFIG.form.entries[k]) body.append(CONFIG.form.entries[k], String(all[k]).slice(0, 1000));
+  }
+  try { if (navigator.sendBeacon && navigator.sendBeacon(CONFIG.form.action, body)) return true; } catch (e) {}
+  try { fetch(CONFIG.form.action, { method: "POST", mode: "no-cors", body }); return true; } catch (e) { return false; }
+}
+// どこまで進んだか(離脱率を見るため)。2時・4時・6時を越えたら1回ずつ
+const MILESTONES = [120, 240, 360];
+function trackProgress() {
+  if (!G || G.ended) return;
+  G.ms = G.ms || [];
+  for (const m of MILESTONES) {
+    if (G.t >= m && !G.ms.includes(m)) { G.ms.push(m); send("progress", { clock: clock(m), steps: G.timeline.length, elapsed: elapsedSec() }); }
+  }
+}
+
+/* --- 音(外部ファイルなし。その場で合成する) --- */
+const SND = {
+  ctx: null, amb: null,
+  ensure() {
+    if (!STATS.sound) return null;
+    try {
+      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state === "suspended") this.ctx.resume();
+    } catch (e) { return null; }
+    return this.ctx;
+  },
+  tone(f, start, dur, vol, type) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(vol, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g).connect(c.destination); o.start(start); o.stop(start + dur + 0.05);
+  },
+  noise(start, dur, vol, freq, q) {
+    const c = this.ctx, len = Math.ceil(c.sampleRate * dur), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; f.Q.value = q || 1;
+    g.gain.setValueAtTime(0.0001, start); g.gain.exponentialRampToValueAtTime(vol, start + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    s.connect(f).connect(g).connect(c.destination); s.start(start); s.stop(start + dur + 0.02);
+  },
+  // 夜の事務室: 空調のさーっという音と、電源の低いうなり(西日本は60Hz)
+  ambientStart() {
+    const c = this.ensure();
+    if (!c || this.amb) return;
+    const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = buf; src.loop = true; lp.type = "lowpass"; lp.frequency.value = 500;
+    g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.exponentialRampToValueAtTime(0.05, c.currentTime + 2);
+    src.connect(lp).connect(g).connect(c.destination); src.start();
+    const hum = c.createOscillator(), hg = c.createGain();
+    hum.frequency.value = 60; hg.gain.value = 0.004; hum.connect(hg).connect(c.destination); hum.start();
+    this.amb = { src, g, hum };
+  },
+  ambientStop() {
+    if (!this.amb || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    try { this.amb.g.gain.exponentialRampToValueAtTime(0.0001, t + 1); this.amb.src.stop(t + 1.1); this.amb.hum.stop(t + 0.2); } catch (e) {}
+    this.amb = null;
+  },
+  // 日本の電話の呼出音: 400Hz を 16Hz で揺らし、1秒鳴って2秒休む。2回
+  ring() {
+    const c = this.ensure();
+    if (!c) return;
+    const t0 = c.currentTime + 0.05;
+    for (let k = 0; k < 2; k++) {
+      const s = t0 + k * 3, o = c.createOscillator(), am = c.createGain(), lfo = c.createOscillator(), depth = c.createGain(), env = c.createGain();
+      o.frequency.value = 400; lfo.type = "square"; lfo.frequency.value = 16; depth.gain.value = 0.5; am.gain.value = 0.5;
+      lfo.connect(depth).connect(am.gain);
+      env.gain.setValueAtTime(0.0001, s); env.gain.exponentialRampToValueAtTime(0.06, s + 0.02);
+      env.gain.setValueAtTime(0.06, s + 0.97); env.gain.exponentialRampToValueAtTime(0.0001, s + 1);
+      o.connect(am).connect(env).connect(c.destination);
+      o.start(s); lfo.start(s); o.stop(s + 1.05); lfo.stop(s + 1.05);
+    }
+  },
+  printer() {
+    const c = this.ensure();
+    if (!c) return;
+    const t = c.currentTime + 0.05;
+    for (let i = 0; i < 16; i++) { this.noise(t + i * 0.17, 0.12, 0.05, 2200, 1.5); this.noise(t + i * 0.17, 0.05, 0.05, 180, 0.8); }
+  },
+  chime(kind) {
+    const c = this.ensure();
+    if (!c) return;
+    const t = c.currentTime + 0.02, seq = kind === "bad" ? [196, 147] : kind === "msg" ? [880, 1175] : [660, 880];
+    seq.forEach((f, i) => this.tone(f, t + i * 0.14, 0.4, 0.04));
+  },
+  tick() { const c = this.ensure(); if (c) this.tone(1400, c.currentTime + 0.01, 0.05, 0.012, "square"); },
+  dawn(good) {
+    const c = this.ensure();
+    if (!c) return;
+    const t = c.currentTime + 0.1;
+    (good ? [392, 494, 587, 784] : [147, 175, 208]).forEach((f, i) => this.tone(f, t + i * 0.18, 2.6, 0.03));
+  },
+};
+// 出来事が出たときの音
+function eventSound() {
+  if (!G || !G.pending || G.pending === lastEventShown) return;
+  lastEventShown = G.pending;
+  const ev = EV[G.pending], p = ev.prop ? ev.prop(G) : null;
+  if (p && p.kind === "call") SND.ring();
+  else if (p && p.kind === "paper") SND.printer();
+  else if (p && (p.kind === "chat" || p.kind === "mail")) SND.chime("msg");
+  else SND.chime(G.pending === "task6" ? "bad" : "event");
+}
+
+/* --- 用語(本文の中の言葉を押すと説明が出る) --- */
+const TERMS = {
+  "VPN機器": "外から院内のネットに入るための入口の機械。業者の保守や、在宅の医師が使う。",
+  "バックアップ": "データの控え。壊れたときに元へ戻すための写し。",
+  "暗号化": "鍵がないと読めない形に変えること。ここでは犯人が勝手にかけ、病院がデータを読めなくなっている。",
+  "サーバ": "電子カルテなどのデータと仕組みを動かしている、病院の中心のコンピュータ。",
+  "管理者ID": "何でも変えられる強い権限を持つアカウント。奪われると何でもされてしまう。",
+  "管理者の権限": "何でも変えられる強い権限。職員のPCにまで付いていると、乗っ取られたときの被害が広がる。",
+  "保守": "業者がシステムを点検・修理すること。外から遠隔で入ってくることが多い。",
+  "保全": "証拠を壊さずに写し取っておくこと。あとで「いつ・何が」を確かめるため。",
+  "身代金": "データを戻す代わりに犯人が求めるお金。払っても戻る保証はなく、犯罪の資金になる。",
+  "遠隔操作": "離れた場所から、コンピュータを操ること。",
+};
+const TERM_LIST = Object.keys(TERMS).sort((a, b) => b.length - a.length);
+function termify(html, used) {
+  for (const t of TERM_LIST) {
+    if (used.has(t)) continue;
+    const i = html.indexOf(t);
+    if (i < 0) continue;
+    used.add(t);
+    html = html.slice(0, i) + '<button type="button" class="term" data-term="' + t + '">' + t + "</button>" + html.slice(i + t.length);
+  }
+  return html;
+}
+let tipEl = null;
+function showTip(btn) {
+  if (!tipEl) { tipEl = document.createElement("div"); tipEl.id = "tip"; tipEl.setAttribute("role", "tooltip"); document.body.appendChild(tipEl); }
+  tipEl.innerHTML = "<b>" + esc(btn.dataset.term) + "</b>" + esc(TERMS[btn.dataset.term] || "");
+  tipEl.hidden = false;
+  const r = btn.getBoundingClientRect();
+  tipEl.style.left = Math.max(8, Math.min(window.innerWidth - 300, r.left)) + "px";
+  tipEl.style.top = (r.bottom + 6) + "px";
+}
+function hideTip() { if (tipEl) tipEl.hidden = true; }
+
+/* --- 描画の部品 --- */
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function paras(text, used) { return text ? text.split("\n\n").map((p) => "<p>" + (used ? termify(esc(p), used) : esc(p)) + "</p>").join("") : ""; }
+function remainText(g) { const r = Math.max(0, END - g.t); return Math.floor(r / 60) + "時間" + String(r % 60).padStart(2, "0") + "分"; }
+
+function metersHTML(g) {
+  return '<div class="meters">' + Object.keys(METER).map((k) => {
+    const v = Math.round(g.m[k]), bad = WORSE_UP[k];
+    const color = bad ? (v >= 50 ? "var(--bad)" : v >= 25 ? "var(--warn)" : "var(--good)") : (v >= 60 ? "var(--good)" : v >= 40 ? "var(--warn)" : "var(--bad)");
+    return '<div class="meter"><div class="k">' + METER[k] + '</div><div class="v">' + v + (k === "spread" ? "%" : "") +
+      '</div><div class="bar"><i style="width:' + v + "%;background:" + color + '"></i></div></div>';
+  }).join("") + "</div>";
+}
+
+function stateHTML(g) {
+  const net = { open: "外とも院内もつながったまま", outsideCut: "外とは切断・院内はつながったまま", segmented: "部署ごとに分離", off: "院内も全部抜いた" }[g.net];
+  const paper = g.paperReady ? "整った" : g.paperAt !== null ? "準備中(" + clock(g.paperAt) + "に整う)" : "準備していない";
+  const ir = g.ir.onsite ? "到着済み" : g.ir.calledAt !== null ? "電話で支援中(" + clock(g.ir.arriveAt) + "到着)" : "連絡していない";
+  const items = [["ネット", net], ["紙の運用", paper], ["対応チーム", ir], ["院長", g.director ? "報告済み" : "寝ている"]];
+  if (g.serversOff) items.push(["サーバ", "電源を落とした"]);
+  return '<div class="state">' + items.map(([k, v]) => "<span>" + k + ": <b>" + v + "</b></span>").join("") + "</div>";
+}
+
+function deltasHTML(last) {
+  const parts = Object.keys(METER).map((k) => {
+    const d = Math.round(last.after[k] - last.before[k]);
+    if (!d) return "";
+    const worse = WORSE_UP[k] ? d > 0 : d < 0;
+    return '<span class="' + (worse ? "bad" : "good") + '">' + METER[k] + " " + (d > 0 ? "+" : "") + d + "</span>";
+  }).filter(Boolean);
+  return parts.length ? '<div class="deltas">' + parts.join("") + "</div>" : "";
+}
+
+/* 場所の絵 */
+const PLACES = {
+  office: "事務室", server: "サーバ室", corridor: "病棟の廊下", ward: "ナースステーション", er: "救急入口",
+  director: "院長室", pharmacy: "薬剤部", waiting: "外来の待合室", exterior: "さくら町立病院",
+};
+/* 登場人物(顔は見せない。後ろ姿とシルエットだけ) */
+const PEOPLE = {
+  miyoshi: { name: "三好 看護師長", role: "夜勤の看護師長", line: "災害訓練の紙の様式を作った人。頼めば、紙で病院を回してくれる。", pos: "50% 30%", stage: "50% 35%" },
+  tachibana: { name: "立花 院長", role: "病院のトップ", line: "町に病院はここだけ。朝の外来は、止めたくない。", pos: "49% 40%", stage: "50% 45%" },
+  makabe: { name: "真壁さん", role: "ブルーライン社 事件対応チーム", line: "電話一本で手伝ってくれる。車で着くのは3時間後。", pos: "64% 30%", stage: "50% 20%" },
+  oka: { name: "岡 先生", role: "当直医", line: "救急は断りたくない。検査の結果が見られなくても。", pos: "66% 22%", stage: "50% 22%" },
+};
+Object.entries(PEOPLE).forEach(([k, p]) => { PLACES[k] = p.name; });
+let shownPlace = null;
+function stageHTML(place, g, big) {
+  const changed = place !== shownPlace;
+  shownPlace = place;
+  const dawn = g ? Math.max(0, Math.min(1, (g.t - START) / (END - START))) : 0.15;
+  return '<div class="stage' + (changed ? " in" : "") + (big ? " big" : "") + '" style="--dawn:' + dawn.toFixed(2) + '">' +
+    '<img src="img/' + place + '.jpg" alt=""' + (PEOPLE[place] ? ' style="object-position:' + PEOPLE[place].stage + '"' : "") + ' onerror="this.remove()">' +
+    '<div class="cap"><b>' + PLACES[place] + "</b><span>" + (g ? clock(g.t) : "") + "</span></div></div>";
+}
+
+/* 画面の中の「物」(脅迫文の紙・電話・メール・チャット) */
+function propHTML(p, live) {
+  if (!p) return "";
+  if (p.kind === "paper" && p.variant === "threat") {
+    return '<div class="paper"><b>48 HOURS.</b>\n\nIf you do not contact us,\nwe will publish your patients\' data.\n\n' +
+      (p.exfil ? "SAMPLE ATTACHED: patient_list_part1\n" + '<span class="redact">xxxxxxxx xxxxxxxxxx xxxxxx</span>\n<span class="redact">xxxxxx xxxxxxxxxxxx xxxxxxxx</span>' : "CONTACT: " + '<span class="redact">xxxxxxxxxxxxxxxx</span>') + "</div>";
+  }
+  if (p.kind === "paper") {
+    return '<div class="paper"><b>!!! ALL OF YOUR FILES ARE ENCRYPTED !!!</b>\n\nYour network has been breached.\nYour data has been copied to our servers.\nTo restore your files and keep them private,\ncontact us.\n\nDo not shut down. Do not rename files.\nDo not contact the police.\n\n' +
+      'CONTACT: <span class="redact">xxxxxxxxxxxxxxxx</span>\nYOUR ID: SKR-0031-7765</div>';
+  }
+  if (p.kind === "call") {
+    const av = p.p && PEOPLE[p.p] ? '<img class="av" src="img/' + p.p + '.jpg" alt="" style="object-position:' + PEOPLE[p.p].pos + '" onerror="this.remove()">' : '<span class="ring" aria-hidden="true"></span>';
+    return '<div class="call' + (live ? " in" : "") + '">' + av + '<div><div class="who">' + esc(p.who) +
+      '</div><div class="sub">' + esc(p.sub) + '</div></div><span class="dir">' + esc(p.dir) + "</span></div>";
+  }
+  if (p.kind === "mail") {
+    return '<div class="mail"><div class="mh">差出人: <b>' + esc(p.from) + "</b><br>件名: <b>" + esc(p.subject) + "</b></div>" +
+      '<div class="mb">データ復元の専門会社です。暗号を解いて、元どおりに戻せます。<br>費用は4,000万円。手法は企業秘密のため非公開とさせていただきます。</div></div>';
+  }
+  if (p.kind === "chat") {
+    return '<div class="chat"><div class="ch-h">匿名のチャット — 脅迫文の連絡先</div><div class="bubble"><span class="nm">support</span>48時間以内に連絡がなければ、盗んだ患者のデータを公開する。</div>' +
+      '<div class="att">' + (p.exfil ? '[添付] 患者一覧の写真(名前と病名。確かめるため黒塗りにした)<div class="rows"><i style="width:92%"></i><i style="width:78%"></i><i style="width:85%"></i><i style="width:64%"></i></div>' : "[添付なし]") + "</div></div>";
+  }
+  return "";
+}
+
+/* 院内ネットの地図: 暗号化された区画は赤、切った線は点線 */
+const NET_ORDER = ["ekarte", "jimu", "iji", "kensa", "byoA", "gairai", "byoB", "kyukyu", "yaku"]; // 暗号化されていく順
+const NET_LABEL = { ekarte: "カルテ", jimu: "事務", iji: "医事", kensa: "検査", byoA: "病棟A", gairai: "外来", byoB: "病棟B", kyukyu: "救急", yaku: "薬剤", backup: "控え" };
+function netmapHTML(g) {
+  const cx = 170, cy = 75;
+  const rows = [["jimu", "iji", "ekarte", "backup", "kensa"], ["byoA", "byoB", "gairai", "kyukyu", "yaku"]];
+  const hit = new Set(NET_ORDER.slice(0, Math.min(9, Math.ceil(g.m.spread / 100 * 9))));
+  const linkStyle = g.net === "off" ? 'stroke="#2a313a" stroke-dasharray="2 5"' : g.net === "segmented" ? 'stroke="#3a4552" stroke-dasharray="5 4"' : 'stroke="#4a5868"';
+  let svg = '<svg viewBox="0 0 300 150" role="img" aria-label="院内ネットの地図。暗号化された区画は' + hit.size + "つ\">";
+  const outOpen = g.net === "open";
+  svg += '<line x1="22" y1="' + cy + '" x2="' + cx + '" y2="' + cy + '" ' + (outOpen ? 'stroke="#ff6f6f" stroke-opacity=".7"' : 'stroke="#2a313a" stroke-dasharray="2 5"') + ' stroke-width="1.5"/>';
+  svg += '<text x="10" y="' + (cy + 4) + '" font-size="11" fill="' + (outOpen ? "#ff8a8a" : "#5d6875") + '">外</text>';
+  svg += '<rect x="44" y="' + (cy - 9) + '" width="30" height="18" rx="4" fill="#0e1217" stroke="' + (g.closed.vpn ? "#5d6875" : "#8d97a4") + '"/>' +
+    '<text x="59" y="' + (cy + 4) + '" font-size="9" fill="#8d97a4" text-anchor="middle">VPN</text>';
+  if (!outOpen) svg += '<text x="98" y="' + (cy - 4) + '" font-size="11" fill="#8d97a4">×</text>';
+  rows.forEach((row, r) => row.forEach((id, i) => {
+    const x = 70 + i * 50, y = r === 0 ? 26 : 124;
+    const isBk = id === "backup";
+    const detached = isBk && g.backupDetached;
+    svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + (r === 0 ? y + 11 : y - 11) + '" ' + (detached ? 'stroke="#2a313a" stroke-dasharray="2 5"' : linkStyle) + ' stroke-width="1.2"/>';
+    let fill = "#10241b", stroke = "#3fcf8e", label = NET_LABEL[id], tc = "#cfe9dc";
+    if (isBk) {
+      const seen = g.backupSeen;
+      if (!seen) { fill = "#141920"; stroke = "#5d6875"; label = "控え ?"; tc = "#8d97a4"; }
+      else if (seen === "lost") { fill = "#2a1114"; stroke = "#ff6f6f"; tc = "#ffc9c9"; }
+      else if (seen === "old") { fill = "#2a2210"; stroke = "#f2b84b"; label = "控え(金庫)"; tc = "#f6dca6"; }
+    } else if (id === "ekarte" && g.serversOff) { fill = "#141920"; stroke = "#5d6875"; label = "電源断"; tc = "#8d97a4"; }
+    else if (hit.has(id)) { fill = "#2a1114"; stroke = "#ff6f6f"; tc = "#ffc9c9"; }
+    svg += '<rect x="' + (x - 22) + '" y="' + (y - 11) + '" width="44" height="22" rx="5" fill="' + fill + '" stroke="' + stroke + '"/>' +
+      '<text x="' + x + '" y="' + (y + 4) + '" font-size="' + (label.length > 4 ? 8.5 : 10) + '" fill="' + tc + '" text-anchor="middle">' + label + "</text>";
+  }));
+  svg += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#0e1217" stroke="#8d97a4"/></svg>';
+  return '<div class="card netmap"><h3>院内ネット</h3>' + svg + '<div class="legend">赤: 暗号化された区画 ／ 点線: 切った線</div></div>';
+}
+
+/* 初めての人だけに出す遊び方 */
+function guideHTML() {
+  if (STATS.guideSeen || !G || G.timeline.length > 0) return "";
+  return '<div class="card guide"><div class="tag">遊び方(30秒)</div><ol>' +
+    "<li>下の「できること」から1つ選ぶと、時計が進む。朝8時30分の外来までに、全部はできない。</li>" +
+    "<li>" + (isNarrow() ? "下" : "右") + "の地図と、上の4つの数字で、病院のいまが分かる。</li>" +
+    "<li>調べて分かったことは「わかったこと」にたまる。どこから入られたかを見抜こう。下線の言葉は、押すと説明が出る。</li></ol>" +
+    '<button type="button" class="ch small" data-cmd="guide-ok">わかった</button></div>';
+}
+
+function lastHTML(g, used) {
+  const L = g.last;
+  if (!L) return "";
+  const span = L.t1 > L.t0 ? clock(L.t0) + " → " + clock(L.t1) + "(" + (L.t1 - L.t0) + "分)" : clock(L.t0);
+  return '<div class="card" id="last"><div class="when">' + span + "</div>" +
+    (L.choice ? '<div class="fine">あなたの判断: ' + esc(L.choice) + "</div>" : "") +
+    "<h2>" + esc(L.h) + "</h2>" + propHTML(L.prop, false) +
+    (L.lines.length ? '<div class="log">' + L.lines.map(esc).join("\n") + "</div>" : "") +
+    paras(L.text, used) +
+    L.notices.map((n) => '<p class="notice">● ' + esc(n) + "</p>").join("") +
+    deltasHTML(L) + "</div>";
+}
+
+function eventHTML(g, used) {
+  const ev = EV[g.pending];
+  const btns = ev.choices(g).map((c, i) => {
+    const why = c.need ? c.need(g) : null;
+    return '<button class="ch" data-choice="' + i + '"' + (why ? " disabled" : "") + ">" +
+      (c.cost ? '<span class="cost">' + c.cost + "分</span>" : "") + esc(c.label) +
+      (why ? '<span class="sub">' + esc(why) + "</span>" : "") + "</button>";
+  }).join("");
+  return '<div class="card event" id="ev"><div class="tag">出来事 — ' + clock(g.pendingAt ?? g.t) +
+    (g.pendingAt !== null && g.t > g.pendingAt ? "(手が離せず、" + clock(g.t) + " に対応)" : "") + "</div><h2>" + esc(ev.h(g)) + "</h2>" +
+    (ev.prop ? propHTML(ev.prop(g), true) : "") + paras(ev.text(g), used) + '<div class="choices">' + btns + "</div></div>";
+}
+
+function actionsHTML(g) {
+  const groups = {};
+  visibleActions(g).forEach((a) => { (groups[a.group] = groups[a.group] || []).push(a); });
+  return '<div class="card" id="acts"><div class="acts-h">できること <span class="fine">(残り ' + remainText(g) + ")</span></div>" + Object.entries(groups).map(([name, list]) =>
+    '<div class="group"><h3>' + name + '</h3><div class="choices">' + list.map((a) => {
+      const av = avail(g, a), cost = a.cost(g);
+      const sub = [a.note, av.ok ? "" : av.why].filter(Boolean).join(" — ");
+      return '<button class="ch" data-act="' + a.id + '"' + (av.ok ? "" : " disabled") + '><span class="cost">' + cost + "分</span>" +
+        esc(a.label) + (sub ? '<span class="sub">' + esc(sub) + "</span>" : "") + "</button>";
+    }).join("") + "</div></div>").join("") + "</div>";
+}
+
+function sideHTML(g) {
+  const notes = g.notes.slice().reverse().map((n) => '<li><span class="when">' + clock(n.t) + "</span><br>" + esc(n.text) + "</li>").join("");
+  const tl = g.timeline.slice().reverse().map((e) => '<li><span class="when">' + clock(e.t) + "</span><br>" + esc(e.label) + "</li>").join("");
+  return '<aside class="side g-side">' + netmapHTML(g) +
+    '<details class="card notes-card"' + (isNarrow() ? "" : " open") + "><summary><h3>わかったこと(" + g.notes.length + ")</h3></summary>" +
+    (notes ? "<ul>" + notes + "</ul>" : '<p class="empty">まだ何も調べていない</p>') + "</details>" +
+    '<div class="card tl-card"><h3>今夜の動き</h3>' + (tl ? "<ul>" + tl + "</ul>" : '<p class="empty">まだ何もしていない</p>') + "</div></aside>";
+}
+
+function soundBtn() { return '<button type="button" class="hb" data-cmd="sound" aria-pressed="' + STATS.sound + '">音 ' + (STATS.sound ? "オン" : "オフ") + "</button>"; }
+function headerHTML(g) {
+  return '<header class="top"><h1>さくら町立病院の一夜</h1><div class="hbtns">' + soundBtn() +
+    (g && !g.ended && CONFIG.form ? '<button type="button" class="hb" data-cmd="comment">感想を送る</button>' : "") + "</div>" +
+    '<div class="clock">' + clock(g.t) + "<small>" + (g.ended ? "一夜が明けた" : "外来まで " + remainText(g)) + "</small></div></header>";
+}
+
+function castHTML() {
+  return '<h3 class="cast-h">この夜の人たち</h3><div class="cast">' + Object.entries(PEOPLE).map(([k, p]) =>
+    '<div class="person"><div class="ph"><img src="img/' + k + '.jpg" alt="" style="object-position:' + p.pos + '" onerror="this.remove()"></div>' +
+    '<div class="pn">' + p.name + '</div><div class="pr">' + p.role + '</div><div class="pl">' + p.line + "</div></div>").join("") +
+    '<div class="person unknown"><div class="ph"><span>?</span></div><div class="pn">相手</div><div class="pr">脅迫文の送り主</div><div class="pl">顔も名前も分からない。チャットの名前は「support」。</div></div></div>';
+}
+
+function renderTitle() {
+  shownPlace = null;
+  const s = savedGame();
+  app.innerHTML = '<div class="title">' + stageHTML("exterior", null, true) +
+    '<div class="tag">インシデント・ゼロ</div><h1>さくら町立病院の一夜</h1>' +
+    "<p>夜中の0時24分、町にひとつしかない病院のカルテが、ぜんぶ開かなくなる。あなたは、この病院のシステムを一人で見てきた事務職員。朝8時30分には外来が始まる。</p>" +
+    '<div class="startrow">' +
+    (s ? '<button class="primary" data-cmd="resume">続きから(' + clock(s.t) + ")</button>" + '<button class="ghost" data-cmd="start">はじめから</button>'
+       : '<button class="primary" data-cmd="start">はじめる</button>') + soundBtn() + "</div>" +
+    '<p class="fine">1回 15〜25分。途中でやめても、この端末なら続きから遊べます。</p>' +
+    "<ul><li>行動するたびに時計が進む。全部はできない。</li>" +
+    "<li>どこから入られたか、控えは無事か、情報は盗まれたかは、調べないと分からない。答えは毎回変わる。</li>" +
+    "<li>途中で正解・不正解は出ない。最後に、ふりかえり会がある。</li></ul>" +
+    castHTML() +
+    '<p class="fine">病院・人物・会社・出来事の細部は架空です。実在の攻撃の手順は書いていません。</p>' +
+    (CONFIG.form ? '<p class="fine">遊び方を良くするため、匿名の利用状況(どこまで進んだか・結果)を送ります。名前やメールなど、個人が分かる情報は送りません。' +
+      '<button type="button" class="link" data-cmd="telemetry">' + (STATS.telemetry ? "送らないようにする" : "送るようにする") + "</button></p>" : "") +
+    (STATS.plays ? '<p class="fine">これまでに ' + STATS.plays + " 回挑戦" + (STATS.best ? "・いちばん良かったのは " + STATS.best.rank + "(" + STATS.best.score + "点)" : "") + "</p>" : "") +
+    "</div>";
+}
+
+function renderPlay() {
+  const place = G.pending ? placeOf(EV[G.pending], G) : (G.last.place || "office");
+  const used = new Set();
+  app.innerHTML = headerHTML(G) + metersHTML(G) + stateHTML(G) +
+    '<div class="grid">' +
+    '<div class="g-stage">' + stageHTML(place, G) + "</div>" +
+    '<div class="g-live" aria-live="polite">' + guideHTML() + lastHTML(G, used) + (G.pending ? eventHTML(G, used) : "") + "</div>" +
+    sideHTML(G) +
+    (G.pending ? "" : '<div class="g-acts">' + actionsHTML(G) + "</div>") +
+    "</div>";
+}
+
+function turningPoints(g) {
+  const first = (ids) => { const e = g.timeline.find((x) => ids.includes(x.id)); return e ? e.t1 : null; };
+  const out = [];
+  const cut = first(["cut_outside", "segment", "unplug_all"]);
+  out.push(cut !== null ? "外からの命令を断った: " + clock(cut) + "(始まりから" + (cut - START) + "分)" : "最後まで、外とつながっていた");
+  out.push(g.paperReadyAt !== null ? "紙の運用が整った: " + clock(g.paperReadyAt) : "紙の運用は整わなかった");
+  const ir = first(["call_ir"]);
+  out.push(ir !== null ? "対応チームに電話した: " + clock(ir) : "対応チームを呼ばなかった");
+  const dir = first(["wake_director"]);
+  out.push(dir !== null ? "院長に伝えた: " + clock(dir) : "院長には自分から伝えなかった(6:30に院長が来た)");
+  const b = g.hidden.backup;
+  out.push(b === "lost" ? "控えは事件の前からやられていた(この回は守りようがなかった)" :
+    b === "offline" ? "金庫の外付けディスクが残っていた(前任者の決まりごとに救われた)" :
+    g.backupLostAt !== null ? "控えは " + clock(g.backupLostAt) + " に暗号化された。それまでに線を抜けば守れた" : "院内の控えを守りきった");
+  out.push(g.preserved ? "証拠を保全した" + (g.serversOff ? "(ただし電源を落としたサーバのメモリは消えていた)" : "") :
+    g.serversOff ? "電源を落とし、メモリの手がかりが消えた。保全もしなかった" : "証拠の保全はしなかった");
+  return out;
+}
+
+/* --- 結果の共有(画像と投稿文) --- */
+function shareLine(g) {
+  const R = g.result;
+  if (R.reinfect) return "朝につなぎ直したら、戻ってきた。";
+  const bits = [];
+  if (R.entryOK && g.identified) bits.push("侵入口を見抜いて塞いだ");
+  if (R.doorOK) bits.push("裏口を消した");
+  if (R.backupSaved) bits.push("控えを守った");
+  return bits.length ? bits.join("・") + "。" : "";
+}
+function shareText(g) { return "さくら町立病院の一夜、ランク" + g.result.rank + "「" + g.result.title + "」でした。" + shareLine(g) + " #インシデントゼロ"; }
+function loadImg(src) { return new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; }); }
+function wrapText(x, text, left, top, width, lh) {
+  let line = "", y = top;
+  for (const ch of text) {
+    if (x.measureText(line + ch).width > width && line) { x.fillText(line, left, y); line = ch; y += lh; } else line += ch;
+  }
+  if (line) x.fillText(line, left, y);
+}
+async function makeCard(g, withPhoto) {
+  const c = document.createElement("canvas");
+  c.width = 1200; c.height = 630;
+  const x = c.getContext("2d"), R = g.result;
+  const F = '"Hiragino Sans","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif';
+  x.fillStyle = "#0b0d10"; x.fillRect(0, 0, 1200, 630);
+  if (withPhoto) {
+    const im = await loadImg("img/exterior.jpg");
+    if (im) { const r = Math.max(1200 / im.width, 630 / im.height), w = im.width * r, h = im.height * r; x.drawImage(im, (1200 - w) / 2, (630 - h) / 2, w, h); }
+  }
+  const gr = x.createLinearGradient(0, 0, 1200, 0);
+  gr.addColorStop(0, "rgba(5,7,10,.94)"); gr.addColorStop(0.6, "rgba(5,7,10,.6)"); gr.addColorStop(1, "rgba(5,7,10,.25)");
+  x.fillStyle = gr; x.fillRect(0, 0, 1200, 630);
+  x.fillStyle = "#f2b84b"; x.font = "600 26px " + F; x.fillText("インシデント・ゼロ", 64, 92);
+  x.fillStyle = "#e7eaee"; x.font = "800 58px " + F; x.fillText("さくら町立病院の一夜", 64, 168);
+  x.strokeStyle = "#62aefc"; x.lineWidth = 4; x.strokeRect(64, 216, 150, 150);
+  x.font = "800 110px ui-monospace,Consolas,monospace"; x.textAlign = "center"; x.fillText(R.rank, 139, 332); x.textAlign = "left";
+  x.font = "700 44px " + F; x.fillText(R.title, 250, 268);
+  x.fillStyle = "#b9c4d0"; x.font = "500 28px " + F; wrapText(x, shareLine(g), 250, 318, 860, 40);
+  x.fillStyle = "#8d97a4"; x.font = "500 26px " + F; x.fillText("点数 " + R.score + " / 100", 250, 410);
+  x.fillStyle = "#e7eaee"; x.font = "600 30px " + F; x.fillText("夜中0時24分、カルテが全部開かなくなった。あなたなら、どうする？", 64, 520);
+  x.fillStyle = "#8d97a4"; x.font = "500 22px " + F; x.fillText(CONFIG.url ? CONFIG.url.replace(/^https?:\/\//, "") : "omicreate", 64, 580);
+  return c;
+}
+// ファイルを直接開いたときは写真入りの画像を書き出せないので、写真なしで作り直す
+async function cardBlob(g) {
+  for (const photo of [true, false]) {
+    try {
+      const c = await makeCard(g, photo);
+      const b = await new Promise((r) => c.toBlob(r, "image/png"));
+      if (b) return b;
+    } catch (e) { /* 次は写真なしで */ }
+  }
+  return null;
+}
+async function shareAction(cmd) {
+  const text = shareText(G), url = CONFIG.url;
+  if (cmd === "share-x") window.open("https://x.com/intent/post?text=" + encodeURIComponent(text) + (url ? "&url=" + encodeURIComponent(url) : ""), "_blank", "noopener");
+  else if (cmd === "share-threads") window.open("https://www.threads.net/intent/post?text=" + encodeURIComponent(text + (url ? " " + url : "")), "_blank", "noopener");
+  else if (cmd === "share-save" || cmd === "share-native") {
+    const blob = await cardBlob(G);
+    if (!blob) return;
+    const file = new File([blob], "incident-zero-result.png", { type: "image/png" });
+    if (cmd === "share-native" && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: text + (url ? " " + url : "") }); } catch (e) { /* 閉じただけ */ }
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+}
+
+/* --- 感想(結末で聞く。送り先があるときだけ出す) --- */
+const STUCK = ["最初の線の切り方", "救急車を受けるか", "「戻せます」のメール", "相手からの知らせ", "院長への説明", "薬剤部の内線", "新聞社の電話", "朝、外とつなぐか", "外来をどうするか", "迷ったところはなかった"];
+function feedbackHTML() {
+  if (!CONFIG.form) return "";
+  if (FB.sent) return '<div class="card fb" id="fb"><h2>感想をありがとうございました</h2><p class="fine">次の改善に使わせていただきます。</p></div>';
+  const seg = (q, vals) => '<div class="seg">' + vals.map((v) => '<button type="button" class="segb' + (FB[q] === v ? " on" : "") + '" data-cmd="fb-pick" data-q="' + q + '" data-v="' + v + '" aria-pressed="' + (FB[q] === v) + '">' + v + "</button>").join("") + "</div>";
+  return '<div class="card fb" id="fb"><h2>感想を聞かせてください</h2><p class="fine">匿名・30秒。このゲームを良くするために使います。</p>' +
+    '<div class="q">面白さ(5がいちばん)</div>' + seg("fun", ["1", "2", "3", "4", "5"]) +
+    '<div class="q">もう一度遊びたい？</div>' + seg("again", ["はい", "たぶん", "いいえ"]) +
+    '<div class="q">いちばん迷ったところ</div><select id="fb-stuck"><option value="">選ぶ</option>' + STUCK.map((s) => "<option>" + s + "</option>").join("") + "</select>" +
+    '<div class="q">分かりにくかったところ・ひとこと(なくても大丈夫)</div><textarea id="fb-text" maxlength="500" rows="3"></textarea>' +
+    '<p><button type="button" class="primary" data-cmd="fb-send">送る</button> <span class="fine" id="fb-msg"></span></p></div>';
+}
+
+/* --- 遊んでいる途中の感想 --- */
+function openComment() {
+  let d = document.getElementById("cm");
+  if (!d) {
+    d = document.createElement("dialog");
+    d.id = "cm";
+    d.innerHTML = "<h3>感想を送る</h3><p class=\"fine\">分かりにくい・ここが面白い・ここで迷った、なんでも。匿名で送ります。</p>" +
+      '<textarea id="cm-text" maxlength="500" rows="4"></textarea>' +
+      '<p><button type="button" class="primary" id="cm-send">送る</button> <button type="button" class="ghost" id="cm-close">閉じる</button> <span class="fine" id="cm-msg"></span></p>';
+    document.body.appendChild(d);
+    d.querySelector("#cm-close").onclick = () => d.close();
+    d.querySelector("#cm-send").onclick = () => {
+      const v = d.querySelector("#cm-text").value.trim();
+      if (!v) return;
+      send("comment", { comment: v, clock: G ? clock(G.t) : "", steps: G ? G.timeline.length : "" });
+      d.querySelector("#cm-text").value = "";
+      d.querySelector("#cm-msg").textContent = "送りました。ありがとうございます。";
+    };
+  }
+  d.querySelector("#cm-msg").textContent = "";
+  if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+}
+
+function renderEnd() {
+  const g = G, R = g.result, H = g.hidden;
+  const closedOther = Object.keys(g.closed).filter((k) => g.closed[k] && k !== H.entry).map((k) => ANS.entry[k]);
+  const rows = [
+    ["侵入口", ANS.entry[H.entry], R.entryOK ? (g.identified ? "見抜いて塞いだ" : "塞いだ(使われた跡は確かめていない)") : "塞いでいなかった",
+      closedOther.length ? "(ほかに塞いだもの: " + closedOther.join("、") + ")" : ""],
+    ["裏口", ANS.backdoor[H.backdoor], R.doorOK ? "消した" : "残っていた", ""],
+    ["控え", ANS.backup[H.backup], R.backupSaved ? "使えた" : "使えなかった", ""],
+    ["持ち出し", ANS.exfil[H.exfil], g.egressKnown ? "確かめた" : "確かめていない", ""],
+  ];
+  const tl = g.timeline.map((e) => "<li>" + clock(e.t) + " " + esc(e.label) + "</li>").join("");
+  app.innerHTML = headerHTML(g) + stageHTML("exterior", g, true) +
+    '<div class="card"><div class="tag">結末</div><div class="rankrow"><div class="rank">' + R.rank + "</div><div><h2>" + esc(R.title) + "</h2>" +
+    '<div class="fine">点数 ' + R.score + " / 100" + (shareLine(g) ? "・" + esc(shareLine(g)) : "") + "</div></div></div>" + metersHTML(g) +
+    '<table class="ans">' + R.parts.map((p) => "<tr><th>" + p[0] + "</th><td>" + Math.round(p[2]) + " / " + p[1] + "</td></tr>").join("") +
+    R.minus.map((p) => '<tr><th class="bad">' + p[0] + '</th><td class="bad">' + p[1] + "</td></tr>").join("") + "</table>" +
+    '<div class="sharerow"><button type="button" class="ghost" data-cmd="share-save">結果の画像を保存</button>' +
+    '<button type="button" class="ghost" data-cmd="share-x">X に投稿</button><button type="button" class="ghost" data-cmd="share-threads">Threads に投稿</button>' +
+    (navigator.share ? '<button type="button" class="ghost" data-cmd="share-native">共有…</button>' : "") +
+    '<button type="button" class="primary" data-cmd="start">もう一度(答えは変わります)</button></div></div>' +
+    '<div class="card"><h2>後日談</h2><ul>' + R.epi.map((e) => "<li>" + esc(e) + "</li>").join("") + "</ul></div>" +
+    feedbackHTML() +
+    '<div class="card"><h2>ふりかえり会</h2>' +
+    '<h3>今夜の答え</h3><table class="ans">' + rows.map((r) => "<tr><th>" + r[0] + "</th><td>" + esc(r[1]) + "</td><td><b>" + r[2] + "</b> " + esc(r[3]) + "</td></tr>").join("") + "</table>" +
+    "<h3>分かれ目</h3><ul>" + turningPoints(g).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>" +
+    "<h3>あなたの夜</h3><ol>" + tl + "</ol>" +
+    "<h3>実際の事件では(半田病院・2021年)</h3><ul>" +
+    "<li>2021年10月31日の未明、徳島県のつるぎ町立半田病院で、プリンタから犯行声明が大量に印刷され、電子カルテが使えなくなった。</li>" +
+    "<li>侵入口は、外から院内に入るためのVPN機器の、直されていない弱点とされる。</li>" +
+    "<li>バックアップも同じネットにつながっていて、一緒に暗号化された。</li>" +
+    "<li>病院は身代金を払わず、紙のカルテで入院患者の診療を続けた。新しい患者や救急の受け入れを止め、通常の診療に戻ったのは約2か月後(2022年1月)。</li>" +
+    '</ul><p class="fine">出典: <a href="https://scan.netsecurity.ne.jp/article/2022/06/28/47803.html" target="_blank" rel="noopener noreferrer">有識者会議の調査報告書の公開を伝える報道(ScanNetSecurity)</a>。このゲームの病院・人物・会社・出来事の細部は架空。</p></div>' +
+    '<p><button class="primary" data-cmd="start">もう一度(答えは変わります)</button> <button class="ghost" data-cmd="title">タイトルへ</button></p>';
+}
+
+/* --- 進行 --- */
+function newRun() {
+  G = newGame(Math.random);
+  G.sid = Math.random().toString(36).slice(2, 10);
+  G.startedAt = Date.now();
+  STATS.plays++; saveStats();
+  FB = {}; lastEventShown = null;
+  send("start", { clock: clock(G.t) });
+  SND.ambientStart(); SND.printer();
+}
+function resumeRun() {
+  const s = savedGame();
+  if (!s) return newRun();
+  G = s; FB = {}; lastEventShown = G.pending;
+  send("resume", { clock: clock(G.t), steps: G.timeline.length });
+  SND.ambientStart();
+}
+function onEnded() {
+  if (G.endLogged) return;
+  G.endLogged = true;
+  const R = G.result, H = G.hidden;
+  STATS.finished++;
+  if (!STATS.best || R.score > STATS.best.score) STATS.best = { rank: R.rank, score: R.score };
+  saveStats(); store(SAVE_KEY, null);
+  send("end", { clock: clock(G.t), steps: G.timeline.length, rank: R.rank, score: R.score, ending: R.title, answers: [H.entry, H.backdoor, H.backup, H.exfil].join("/"), elapsed: elapsedSec() });
+  SND.ambientStop(); SND.dawn(R.rank === "S" || R.rank === "A");
+}
+function render() {
+  hideTip();
+  if (!G) renderTitle();
+  else if (G.ended) { onEnded(); renderEnd(); }
+  else renderPlay();
+}
+function toTop() {
+  // スマホでは場面の絵から見せる(時計と数字は一つ上)
+  const st = isNarrow() ? document.querySelector(".g-stage") : null;
+  window.scrollTo(0, st ? Math.max(0, st.getBoundingClientRect().top + window.scrollY - 8) : 0);
+}
+
+app.addEventListener("click", (e) => {
+  const term = e.target.closest("button.term");
+  if (term) { showTip(term); return; }
+  hideTip();
+  const b = e.target.closest("button");
+  if (!b || b.disabled) return;
+  const cmd = b.dataset.cmd;
+  if (cmd === "sound") {
+    STATS.sound = !STATS.sound; saveStats();
+    if (!STATS.sound) SND.ambientStop(); else if (G && !G.ended) SND.ambientStart();
+    document.querySelectorAll('[data-cmd="sound"]').forEach((x) => { x.textContent = "音 " + (STATS.sound ? "オン" : "オフ"); x.setAttribute("aria-pressed", STATS.sound); });
+    return;
+  }
+  if (cmd === "telemetry") { STATS.telemetry = !STATS.telemetry; saveStats(); renderTitle(); return; }
+  if (cmd === "comment") { openComment(); return; }
+  if (cmd === "guide-ok") { STATS.guideSeen = true; saveStats(); const gd = b.closest(".guide"); if (gd) gd.remove(); return; }
+  if (cmd === "fb-pick") {
+    FB[b.dataset.q] = b.dataset.v;
+    b.parentElement.querySelectorAll(".segb").forEach((x) => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+    return;
+  }
+  if (cmd === "fb-send") {
+    FB.stuck = document.getElementById("fb-stuck").value;
+    FB.comment = document.getElementById("fb-text").value.trim();
+    if (!FB.fun && !FB.comment) { document.getElementById("fb-msg").textContent = "面白さか、ひとことを入れてください"; return; }
+    send("feedback", { fun: FB.fun, again: FB.again, stuck: FB.stuck, comment: FB.comment, rank: G.result.rank, score: G.result.score, clock: clock(G.t), steps: G.timeline.length });
+    FB.sent = true;
+    document.getElementById("fb").outerHTML = feedbackHTML();
+    return;
+  }
+  if (cmd && cmd.startsWith("share-")) { shareAction(cmd); return; }
+  if (cmd === "title") { G = null; SND.ambientStop(); render(); window.scrollTo(0, 0); return; }
+  if (cmd === "start") newRun();
+  else if (cmd === "resume") resumeRun();
+  else if (b.dataset.act) {
+    if (!STATS.guideSeen) { STATS.guideSeen = true; saveStats(); }
+    SND.tick(); doAction(G, b.dataset.act);
+  } else if (b.dataset.choice !== undefined) { SND.tick(); chooseEvent(G, Number(b.dataset.choice)); }
+  else return;
+  trackProgress();
+  saveGame();
+  render();
+  eventSound();
+  if (G && G.ended) window.scrollTo(0, 0); else toTop();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+window.addEventListener("scroll", hideTip, { passive: true });
+
+render();
+</script>
+</body>
+</html>
