@@ -1,0 +1,10 @@
+// Cloudflare Workers(無料プラン)で静的ファイルだけを配る設定。
+// コードを動かさないので CPU 上限にも当たらず、無料枠を超えたら止まるだけ。
+{
+  "name": "incident-zero",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page"
+  }
+}

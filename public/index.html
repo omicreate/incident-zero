@@ -1,0 +1,2622 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>インシデント・ゼロ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* ディスパッチ端末:平らな暗い計器画面。発光グラデ・丸カード多用をやめ、ヘアライン罫・等幅ラベル・余白で構成。動きは1点のみ。 */
+  :root {
+    --bg: #07080a;
+    --panel: #0d0f12;
+    --panel-2: #0b0d10;
+    --ink: #e7eaef;
+    --ink-dim: #78828f;
+    --ink-faint: #4a525d;
+    --line: #1a1f25;
+    --line-2: #121619;
+    --accent: #4da3ff;        /* 信号色。細線・小さな文字・1点のみに使う */
+    --accent-soft: #0f1d2b;
+    --warn: #e6ad46;
+    --danger: #ff5d64;
+    --good: #37d19b;
+    --attack: #d76a92;
+    color-scheme: dark;
+    --f-display: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+    --f-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+    --f-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--f-body);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: .01em;
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
+    padding-block: clamp(26px, 6vw, 56px);
+  }
+
+  /* ---------- 開幕:ディスパッチ・マストヘッド ---------- */
+  .masthead { margin-bottom: clamp(26px, 6vw, 40px); }
+  .sys-bar {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .sys-bar .sys-tag { color: var(--ink-dim); }
+  .sys-toggle {
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 11px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-dim); cursor: pointer; transition: border-color .14s, color .14s;
+  }
+  .sys-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .sys-toggle[aria-pressed="false"] { color: var(--ink-faint); }
+  .sys-line {
+    font-family: var(--f-mono); font-size: 12.5px; letter-spacing: .04em;
+    color: var(--accent); margin: 16px 0 26px; min-height: 1.2em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .sys-line .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--good);
+    box-shadow: 0 0 0 0 var(--good); animation: standby 2.6s ease-out infinite; flex: none;
+  }
+  @keyframes standby { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 55%,transparent)} 60%,100%{box-shadow:0 0 0 6px transparent} }
+  .sys-line .caret { display: inline-block; width: .55ch; color: var(--accent); animation: blink 1.1s step-end infinite; }
+  @keyframes blink { 50%{ opacity: 0 } }
+
+  h1.title {
+    font-family: var(--f-display); font-weight: 900;
+    font-size: clamp(38px, 10vw, 68px); line-height: .98;
+    letter-spacing: -.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .lede {
+    color: var(--ink-dim); max-width: 46ch; margin: 0;
+    font-size: clamp(14.5px, 2.4vw, 16px);
+  }
+
+  /* ---------- ブリーフィング(設定) ---------- */
+  .briefing { display: grid; gap: 0; border-top: 1px solid var(--line); }
+  .bsec { padding-block: clamp(20px, 4.5vw, 30px); border-bottom: 1px solid var(--line); }
+  .bnum {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em;
+    color: var(--accent); margin: 0 0 15px; display: flex; align-items: baseline; gap: 11px;
+  }
+  .bnum span { color: var(--ink-dim); letter-spacing: .08em; }
+
+  .opt-list { display: grid; gap: 1px; background: var(--line-2); border: 1px solid var(--line-2); border-radius: 8px; overflow: clip; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  .opt {
+    position: relative; text-align: left; background: var(--panel);
+    border: none; border-left: 2px solid transparent;
+    padding: 14px 16px 14px 15px; display: grid; gap: 3px;
+    transition: background .14s, border-color .14s;
+  }
+  .opt:hover { background: var(--panel-2); border-left-color: var(--ink-faint); }
+  .opt[aria-pressed="true"] { background: var(--accent-soft); border-left-color: var(--accent); }
+  .opt[aria-pressed="true"]::after {
+    content: "選択"; position: absolute; top: 13px; right: 14px;
+    font-family: var(--f-mono); font-size: 10px; letter-spacing: .16em; color: var(--accent);
+  }
+  .opt .k { font-weight: 700; font-size: 15px; }
+  .opt .d { font-size: 12.5px; color: var(--ink-dim); line-height: 1.55; max-width: 52ch; }
+  .opt .scn-src { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 5px; letter-spacing: .02em; }
+
+  .role-attack[aria-pressed="true"] { background: color-mix(in srgb, var(--attack) 13%, var(--panel)); border-left-color: var(--attack); }
+  .role-attack[aria-pressed="true"]::after { color: var(--attack); }
+
+  .start-row { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; padding-top: clamp(20px, 4.5vw, 28px); }
+  .btn-primary {
+    background: var(--accent); color: #05080d; border: none; border-radius: 7px;
+    padding: 13px 28px; font-weight: 700; font-size: 15.5px; letter-spacing: .04em;
+    font-family: var(--f-mono); transition: filter .14s, transform .12s;
+  }
+  .btn-primary:hover { filter: brightness(1.12); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
+  .start-hint { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-dim); letter-spacing: .03em; }
+
+  .footnote {
+    margin: clamp(24px, 5vw, 34px) 0 0; font-size: 12px; color: var(--ink-faint);
+    line-height: 1.7; border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  .footnote strong { color: var(--ink-dim); font-weight: 700; }
+
+  /* ---------- プレイ画面 ---------- */
+  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: clip; background: var(--panel); }
+  .hud {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+    padding: 13px clamp(15px, 4vw, 22px); border-bottom: 1px solid var(--line); background: var(--panel-2);
+  }
+  .role-chip {
+    font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; color: var(--ink-dim);
+  }
+  .role-chip.def { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+  .role-chip.atk { color: var(--attack); border-color: color-mix(in srgb, var(--attack) 45%, var(--line)); }
+  .meters { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .meter { min-width: 84px; }
+  .meter .ml {
+    font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);
+    font-family: var(--f-mono); margin-bottom: 5px; display: flex; justify-content: space-between; gap: 8px;
+  }
+  .meter .mv { font-variant-numeric: tabular-nums; color: var(--ink-dim); }
+  .bar { height: 5px; border-radius: 999px; background: var(--bg); overflow: hidden; border: 1px solid var(--line); }
+  .bar > i { display: block; height: 100%; width: 0; transition: width .5s cubic-bezier(.3,.8,.3,1); }
+  .bar.b-damage > i { background: var(--danger); }
+  .bar.b-trust  > i { background: var(--accent); }
+  .step-no { font-family: var(--f-mono); font-size: 11px; color: var(--ink-faint); white-space: nowrap; letter-spacing: .08em; }
+
+  .scene { padding: clamp(20px, 4.5vw, 32px); }
+  .scene .clock {
+    font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .14em; color: var(--warn);
+    text-transform: uppercase; margin: 0 0 14px; display: flex; align-items: center; gap: 9px;
+  }
+  .scene .clock::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); animation: standby 2.4s ease-out infinite; }
+  .scene h2 { font-family: var(--f-display); font-weight: 800; font-size: clamp(21px, 4.6vw, 28px); line-height: 1.22; margin: 0 0 15px; text-wrap: balance; }
+  .scene .body { font-size: clamp(14.5px, 2.5vw, 16px); }
+  .scene .body p { margin: 0 0 13px; }
+  .feedback {
+    border-left: 2px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 7px 7px 0; padding: 12px 15px; margin: 4px 0 20px; font-size: 13.5px; color: var(--ink);
+  }
+  .feedback.bad { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
+  .feedback.ok  { border-left-color: var(--good);   background: color-mix(in srgb, var(--good) 11%, transparent); }
+  .feedback .ft { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); display: block; margin-bottom: 4px; }
+
+  .choices { display: grid; gap: 1px; margin-top: 8px; background: var(--line-2); border: 1px solid var(--line-2); border-radius: 8px; overflow: clip; }
+  .choice {
+    text-align: left; background: var(--panel-2); border: none; border-left: 2px solid transparent;
+    padding: 15px 17px 15px 16px; display: grid; gap: 4px; transition: background .14s, border-color .14s;
+  }
+  .choice:hover { background: var(--panel); border-left-color: var(--accent); }
+  .choice .ck { font-weight: 650; font-size: 15px; }
+  .choice .cd { font-size: 13px; color: var(--ink-dim); }
+  .choice .ctag {
+    justify-self: start; margin-top: 4px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  /* ---------- 結末 ---------- */
+  .ending { padding: clamp(22px, 5vw, 34px); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .ending .verdict { font-family: var(--f-mono); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 12px; display: flex; align-items: center; gap: 9px; }
+  .ending .verdict::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+  .verdict.win { color: var(--good); }
+  .verdict.mix { color: var(--warn); }
+  .verdict.loss { color: var(--danger); }
+  .ending h2 { font-family: var(--f-display); font-weight: 800; font-size: clamp(24px, 5.5vw, 34px); line-height: 1.14; margin: 0 0 16px; text-wrap: balance; }
+  .ending .outcome { font-size: clamp(14.5px, 2.6vw, 16px); margin: 0 0 24px; color: var(--ink); }
+  .learn { border: 1px solid var(--line); border-radius: 9px; overflow: clip; margin-bottom: 18px; }
+  .learn .lh { padding: 11px 16px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  .learn ul { margin: 0; padding: 15px 18px 15px 34px; display: grid; gap: 10px; font-size: 14px; }
+  .learn li::marker { color: var(--accent); }
+  .source { font-size: 12px; color: var(--ink-dim); line-height: 1.65; border-top: 1px solid var(--line); padding-top: 15px; margin-bottom: 22px; }
+  .source b { color: var(--ink); font-weight: 650; }
+  .source a { color: var(--accent); }
+  .ending-actions { display: flex; gap: 11px; flex-wrap: wrap; }
+  .btn-ghost { background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 12px 20px; font-weight: 600; font-size: 14.5px; color: var(--ink); transition: border-color .14s, background .14s; }
+  .btn-ghost:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  .fade { animation: fade .34s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .fade { animation: none }
+    .bar > i { transition: none }
+    .sys-line .dot, .sys-line .caret, .scene .clock::before, .ending .verdict::before { animation: none }
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  /* ---------- 登場人物(影の生態系) ---------- */
+  .roster { border: 1px solid var(--line); border-radius: 10px; overflow: clip; margin-bottom: clamp(24px, 5vw, 36px); background: var(--panel-2); }
+  .roster-h {
+    margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim);
+  }
+  .roster-cols { display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 540px) { .roster-cols { grid-template-columns: 1fr; } }
+  .rcol { padding: 16px 18px; }
+  .rcol + .rcol { border-left: 1px solid var(--line); }
+  @media (max-width: 540px) { .rcol + .rcol { border-left: none; border-top: 1px solid var(--line); } }
+  .rcol-h {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; margin: 0 0 11px;
+    padding-left: 10px; border-left: 2px solid var(--ink-faint);
+  }
+  .rcol.atk .rcol-h { color: var(--attack); border-left-color: var(--attack); }
+  .rcol.def .rcol-h { color: var(--good); border-left-color: var(--good); }
+  .rcol ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+  .rcol li { font-size: 12.5px; color: var(--ink-dim); line-height: 1.5; }
+  .rcol li b { color: var(--ink); font-weight: 650; display: block; font-size: 13px; }
+  .roster-note { margin: 0; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-faint); }
+
+  /* ---------- 端末ログ ---------- */
+  .terminal {
+    font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6;
+    background: #05070a; border: 1px solid var(--line); border-radius: 7px;
+    padding: 11px 13px; margin: 0 0 18px; color: var(--ink-dim); display: grid; gap: 3px; overflow-x: auto;
+  }
+  .terminal .tl { white-space: pre; min-width: 0; }
+  .terminal .tp { color: var(--accent); }
+  .terminal.atk .tp { color: var(--attack); }
+  .terminal .term-cap { color: var(--ink-faint); font-size: 10px; letter-spacing: .06em; margin-top: 6px; white-space: normal; }
+
+  /* ---------- 専門家の助言 ---------- */
+  .advisor {
+    display: grid; gap: 4px; margin: 2px 0 20px; padding: 12px 15px;
+    border: 1px solid var(--line); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--panel-2);
+  }
+  .advisor.atk { border-left-color: var(--attack); }
+  .advisor .adv-who {
+    font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; color: var(--accent);
+  }
+  .advisor.atk .adv-who { color: var(--attack); }
+  .advisor .adv-line { font-size: 14px; color: var(--ink); line-height: 1.6; }
+
+  /* ---------- 技術メモ(上級のみ)＋ 専門解説(ATT&CK × 対策 × 出典) ---------- */
+  .techtag {
+    margin: 2px 0 18px; padding: 10px 13px; border: 1px dashed var(--line);
+    border-left: 2px solid var(--warn); border-radius: 0 7px 7px 0; background: #070b0e;
+    font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6; color: var(--ink-dim);
+  }
+  .techtag .tt-h { color: var(--warn); letter-spacing: .12em; font-size: 10px; text-transform: uppercase; display: block; margin-bottom: 3px; }
+  .techtag b { color: var(--ink); font-weight: 500; }
+  .techbox { margin: 4px 0 18px; border: 1px solid var(--line); border-radius: 9px; overflow: clip; background: var(--panel-2); }
+  .techbox > summary {
+    cursor: pointer; padding: 12px 16px; font-family: var(--f-mono); font-size: 11px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--warn); list-style: none; user-select: none;
+  }
+  .techbox > summary::-webkit-details-marker { display: none; }
+  .techbox > summary::before { content: "▸ "; }
+  .techbox[open] > summary::before { content: "▾ "; }
+  .techbox[open] > summary { border-bottom: 1px solid var(--line); }
+  .tb-body { padding: 14px 16px; display: grid; gap: 7px; }
+  .tb-lead { margin: 0 0 6px; font-size: 13.5px; color: var(--ink); line-height: 1.7; }
+  .tb-h { font-family: var(--f-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-top: 8px; }
+  .tb-chain { margin: 0; padding-left: 20px; display: grid; gap: 5px; font-size: 13px; color: var(--ink-dim); line-height: 1.6; }
+  .tb-chain li::marker { color: var(--warn); font-family: var(--f-mono); }
+  .tb-ctrl { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.6; }
+  .tb-ctrl li::marker { color: var(--good); }
+  .tb-ctrl b { color: var(--ink); font-weight: 650; }
+  .tb-refs { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12.5px; }
+  .tb-refs a { color: var(--accent); }
+  .tb-note { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-faint); line-height: 1.6; }
+
+  /* ---------- フレームのスキャンライン(静的な画面テクスチャ) ---------- */
+  .frame { position: relative; }
+  .scanlines {
+    position: absolute; inset: 0; pointer-events: none; z-index: 4; border-radius: 10px;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0 1px, transparent 1px 3px);
+  }
+
+  /* ---------- 舞台の空気(背景画像・暗転して文字を主役に) ---------- */
+  /* 画は「語らず、夜の温度だけを置く」。強い暗転グラデで可読性を最優先に守る。 */
+  .frame::before, .frame::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1s ease; }
+  .frame::before { z-index: 0; background-size: cover; background-position: center; filter: saturate(.78); }
+  .frame::after { z-index: 1; background: linear-gradient(180deg, rgba(8,11,15,.72), rgba(8,11,15,.88) 50%, rgba(8,11,15,.965)); }
+  #play[data-scn] .frame::before { opacity: .82; }
+  #play[data-scn] .frame::after  { opacity: 1; }
+  #play[data-scn="hospital"] .frame::before { background-image: url(bg/hospital.jpg); }
+  #play[data-scn="pension"]  .frame::before { background-image: url(bg/pension.jpg); }
+  #play[data-scn="port"]     .frame::before { background-image: url(bg/port.jpg); }
+  #play[data-scn="deepfake"] .frame::before { background-image: url(bg/deepfake.jpg); }
+  #play[data-scn="grid"]     .frame::before { background-image: url(bg/grid.jpg); }
+  .hud, .scene { position: relative; z-index: 2; }
+  @media (prefers-reduced-motion: reduce) { .frame::before, .frame::after { transition: none; } }
+
+  /* ---------- 生体認証ゲート ---------- */
+  .authgate { border: 1px solid var(--line); border-radius: 8px; overflow: clip; margin: 0 0 18px; background: #05070a; position: relative; }
+  .authgate::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scansweep 2.6s linear infinite;
+  }
+  @keyframes scansweep { 0%{ transform: translateY(0); opacity:.9 } 100%{ transform: translateY(999%); opacity:.9 } }
+  .ag-h { padding: 9px 13px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .ag-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 9px 13px; border-bottom: 1px solid var(--line-2); font-family: var(--f-mono); font-size: 12px; }
+  .ag-row:last-of-type { border-bottom: none; }
+  .ag-label { color: var(--ink-dim); min-width: 0; }
+  .ag-state { font-size: 11px; letter-spacing: .06em; white-space: nowrap; }
+  .ag-state.ok { color: var(--good); }
+  .ag-state.ng { color: var(--danger); }
+  .ag-state.scan { color: var(--warn); }
+  .ag-note { padding: 10px 13px; border-top: 1px solid var(--line); font-family: var(--f-body); font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+
+  /* ---------- カットイン演出(RGBずれ+フラッシュ) ---------- */
+  .cutin {
+    position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+    padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
+    background: rgba(4,6,9,.74); cursor: pointer;
+  }
+  /* hidden属性を確実に効かせる(.cutinのdisplay:gridがUAのdisplay:noneを上書きしてしまうため) */
+  .cutin[hidden] { display: none !important; }
+  .cutin::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 4px);
+    mix-blend-mode: multiply;
+  }
+  .ci-inner { position: relative; text-align: center; opacity: 0; }
+  .cutin.show .ci-inner { animation: ciIn 1.2s cubic-bezier(.16,.9,.2,1) both; }
+  @keyframes ciIn {
+    0% { opacity: 0; transform: translateX(-11vw) skewX(-9deg); }
+    11% { opacity: 1; transform: translateX(0) skewX(0); }
+    16% { transform: translateX(1.2vw); }
+    22% { transform: translateX(0); }
+    82% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(5vw); }
+  }
+  .ci-bar { display: block; height: 4px; width: clamp(60px, 22vw, 150px); margin: 0 auto 16px; background: currentColor; }
+  .ci-word {
+    display: block; font-family: var(--f-display); font-weight: 900;
+    font-size: clamp(46px, 15vw, 128px); line-height: .96; letter-spacing: .01em; color: var(--ink);
+    text-shadow: .035em 0 rgba(77,163,255,.55), -.035em 0 rgba(215,106,146,.55);
+  }
+  .cutin.good .ci-word { color: var(--good); }
+  .cutin.bad .ci-word { color: var(--danger); }
+  .cutin.atk .ci-word { color: var(--attack); }
+  .cutin.neutral .ci-word { color: var(--accent); }
+  .cutin.good .ci-bar { color: var(--good); } .cutin.bad .ci-bar { color: var(--danger); }
+  .cutin.atk .ci-bar { color: var(--attack); } .cutin.neutral .ci-bar { color: var(--accent); }
+  .ci-sub { display: block; margin-top: 16px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .28em; text-transform: uppercase; color: var(--ink-dim); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .authgate::before { animation: none; display: none; }
+    .cutin.show .ci-inner { animation: none; opacity: 1; }
+    .ci-word { text-shadow: none; }
+  }
+
+  /* ---------- 評価ランク / 選択ログ ---------- */
+  .rankrow { display: flex; align-items: center; gap: 14px; margin: 0 0 18px; }
+  .rankbadge {
+    font-family: var(--f-display); font-weight: 900; font-size: 44px; line-height: 1;
+    width: 64px; height: 64px; display: grid; place-items: center; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+  }
+  .rankbadge.rk-win { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+  .rankbadge.rk-mix { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .rankbadge.rk-loss { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+  .rank-meta { display: grid; gap: 2px; }
+  .rank-label { font-family: var(--f-mono); font-size: 10px; letter-spacing: .24em; color: var(--ink-faint); }
+  .rank-m { font-size: 14.5px; color: var(--ink-dim); }
+
+  .pathlog { border: 1px solid var(--line); border-radius: 9px; overflow: clip; margin-bottom: 18px; }
+  .pathlog .pl-h { padding: 10px 15px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .pathlog ol { margin: 0; padding: 12px 15px; display: grid; gap: 8px; list-style: none; counter-reset: pl; }
+  .pathlog li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; font-size: 13.5px; counter-increment: pl; }
+  .pathlog li::before { content: counter(pl); font-family: var(--f-mono); font-size: 11px; color: var(--ink-faint); grid-column: 1; grid-row: 1; }
+  .pl-q { font-family: var(--f-mono); font-size: 12px; width: 1.4em; text-align: center; color: var(--ink-dim); }
+  .pl-q.good { color: var(--good); } .pl-q.poor { color: var(--danger); } .pl-q.push { color: var(--attack); } .pl-q.restraint { color: var(--accent); }
+  .pl-t { color: var(--ink); min-width: 0; }
+  .pathlog li { grid-template-columns: auto auto 1fr; }
+  .pl-leg { margin: 0; padding: 10px 15px; border-top: 1px solid var(--line); font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; color: var(--ink-faint); }
+
+  /* ---------- 制覇ボード ---------- */
+  .board { border: 1px solid var(--line); border-radius: 10px; overflow: clip; margin-bottom: clamp(24px, 5vw, 36px); background: var(--panel-2); }
+  .board-h { padding: 11px 16px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim); display: flex; justify-content: space-between; }
+  .board-h span { color: var(--accent); }
+  .board-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line-2); }
+  @media (max-width: 540px) { .board-grid { grid-template-columns: repeat(2, 1fr); } }
+  .bcell { background: var(--panel); padding: 11px 12px; display: grid; gap: 2px; border-top: 2px solid transparent; }
+  .bcell.done.defend { border-top-color: var(--good); }
+  .bcell.done.attack { border-top-color: var(--attack); }
+  .bc-scn { font-size: 11.5px; color: var(--ink-dim); line-height: 1.35; min-width: 0; }
+  .bc-role { font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; color: var(--ink-faint); }
+  .bc-rank { font-family: var(--f-display); font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink-faint); }
+  .bcell.done .bc-rank { color: var(--ink); }
+  .bcell.done.defend .bc-rank { color: var(--good); }
+  .bcell.done.attack .bc-rank { color: var(--attack); }
+</style>
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap">
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- セットアップ画面 -->
+  <!-- セットアップ画面 -->
+  <section id="setup">
+    <header class="masthead">
+      <div class="sys-bar">
+        <span class="sys-tag">Incident Response Sim</span>
+        <button type="button" id="sound-toggle" class="sys-toggle" aria-pressed="true">♪ 音 オン</button>
+      </div>
+      <p class="sys-line"><span class="dot" aria-hidden="true"></span><span id="typed"></span><span class="caret" aria-hidden="true">_</span></p>
+      <h1 class="title">インシデント・ゼロ</h1>
+      <p class="lede">実在のセキュリティ事件を下敷きにした、攻守を選べる一人用の体験版。選択ひとつで被害も信頼も動く。事件の「なぜ」を、手を動かして覚える。</p>
+    </header>
+
+    <div class="roster">
+      <p class="roster-h">この事件の、見えない登場人物たち</p>
+      <div class="roster-cols">
+        <div class="rcol atk">
+          <p class="rcol-h">攻める側 — 分業する影</p>
+          <ul>
+            <li><b>司令塔(戦略家)</b> 全体を描き、どこを突くか決める</li>
+            <li><b>脚本家</b> 人をだます文面と筋書きを作る</li>
+            <li><b>偵察屋</b> 更新漏れや弱い入口を探す</li>
+            <li><b>侵入屋 / 横展開屋</b> 入り、奥の機器へ回り込む</li>
+            <li><b>交渉人 / 出口屋</b> 身代金交渉・資金洗浄・逃走</li>
+            <li><b>国家支援 (軍 / APT)</b> 資金と技術を持つ最上位の脅威</li>
+          </ul>
+        </div>
+        <div class="rcol def">
+          <p class="rcol-h">守る側 — 布陣するチーム</p>
+          <ul>
+            <li><b>司令塔(CISO)</b> 止める・続けるの判断を下す</li>
+            <li><b>分析官 / フォレンジック</b> ログ・映像・記録から真相を読む</li>
+            <li><b>ホワイトハッカー</b> 攻撃者の手口で弱点を先に潰す</li>
+            <li><b>ネットワーク班 / AI監視</b> 異常を捉え、線を切る</li>
+            <li><b>警察・サイバー犯罪対策</b> 捜査と、逃走の封じ込め</li>
+            <li><b>現場対応 / 法務・広報 / 経営</b> 業務継続と公表判断</li>
+          </ul>
+        </div>
+      </div>
+      <p class="roster-note">あなたはこの中の「判断する人」になります。プレイ中、場面ごとに端末ログが流れ、専門家がひとこと助言します。</p>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="briefing">
+      <div class="bsec">
+        <p class="bnum">01 <span>舞台を選ぶ</span></p>
+        <div class="opt-list" id="scn-grid"></div>
+      </div>
+      <div class="bsec">
+        <p class="bnum">02 <span>どちら側で挑む</span></p>
+        <div class="opt-list" id="role-grid"></div>
+      </div>
+      <div class="bsec">
+        <p class="bnum">03 <span>難易度 — ヒントの量が変わる</span></p>
+        <div class="opt-list" id="diff-grid"></div>
+      </div>
+      <div class="start-row">
+        <button class="btn-primary" id="start" disabled>出動する</button>
+        <span class="start-hint" id="start-hint">舞台・側・難易度を選ぶと出動できます</span>
+      </div>
+    </div>
+
+    <p class="footnote">
+      <strong>安全のための約束:</strong> このゲームは実在の攻撃手順を使える形では書きません。すべて抽象化した「ゲーム内の判断」です。参考にした事件は、結末画面に公表済みの報告・報道の出典を添えています。
+    </p>
+  </section>
+
+  <!-- プレイ画面 -->
+  <section id="play" hidden>
+    <div class="frame">
+      <div class="scanlines" aria-hidden="true"></div>
+      <div class="hud">
+        <span class="role-chip" id="hud-role">—</span>
+        <div class="meters">
+          <div class="meter">
+            <div class="ml"><span id="m1-label">被害</span><span class="mv" id="m1-val">0</span></div>
+            <div class="bar b-damage"><i id="m1-bar"></i></div>
+          </div>
+          <div class="meter">
+            <div class="ml"><span id="m2-label">信頼</span><span class="mv" id="m2-val">100</span></div>
+            <div class="bar b-trust"><i id="m2-bar"></i></div>
+          </div>
+        </div>
+        <span class="step-no" id="hud-step">—</span>
+      </div>
+      <div class="scene" id="scene"></div>
+    </div>
+  </section>
+
+  <!-- 結末画面 -->
+  <section id="end" hidden>
+    <div class="ending" id="ending"></div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ====== データ:シナリオ × 側 の分岐スクリプト ======
+   実在事件を下敷きにした架空世界。攻撃手順は抽象化。
+   meters: damage(0-100 低いほど良い), trust(0-100 高いほど良い)
+   各シーンの choices[].fx = {dmg, trust} の増減, next = 次シーンID
+*/
+
+const SCENARIOS = {
+  hospital: {
+    name: "さくら町立病院",
+    tag: "ランサムウェア",
+    blurb: "山あいの小さな町立病院。深夜、電子カルテが突然すべて開けなくなる。",
+    src: "下敷き:公立病院のランサムウェア事案(2021)",
+    m1: "混乱", // damageラベル
+    m2: "診療継続",
+  },
+  pension: {
+    name: "国民年金サポート機構",
+    tag: "標的型メール",
+    blurb: "何百万人分の個人情報を預かる窓口機関。一通の添付ファイルから始まる。",
+    src: "下敷き:公的機関の個人情報流出事案(2015)",
+    m1: "流出",
+    m2: "信頼",
+  },
+  port: {
+    name: "東湾(ひがしわん)港",
+    tag: "基幹システム停止",
+    blurb: "西日本の物流を支える巨大港。コンテナを動かす頭脳が朝、止まった。",
+    src: "下敷き:大規模港湾のシステム停止事案(2023)",
+    m1: "停止",
+    m2: "復旧力",
+  },
+  deepfake: {
+    name: "みらい商事 経理部",
+    tag: "ディープフェイク送金詐欺",
+    blurb: "役員そっくりのビデオ会議から、巨額送金の指示。顔も声も、本人にしか見えない。",
+    src: "下敷き:偽ビデオ会議による送金詐欺(2024・最新型)",
+    m1: "損失",
+    m2: "統制",
+  },
+  grid: {
+    name: "首都圏 電力制御センター",
+    tag: "重要インフラ攻撃",
+    blurb: "数百万世帯の電気を操る中枢。真冬の深夜、誰も触れていない遮断器が動き出す。",
+    src: "下敷き:電力網へのサイバー攻撃(2015・海外)",
+    m1: "停電",
+    m2: "制御",
+  },
+};
+
+const ROLES = {
+  defend: { name: "守る側", desc: "担当者として、被害を止め信頼を守る", chip: "def", label: "DEFENDER" },
+  attack: { name: "攻める側", desc: "侵入者の視点で、手口と弱点を知る(抽象化)", chip: "atk", label: "ATTACKER" },
+};
+
+const DIFFS = {
+  easy:   { name: "初級", desc: "IT知識ゼロでOK。用語に注釈、助言つき", hints: true },
+  mid:    { name: "中級", desc: "注釈は最小限。判断は自分で", hints: false },
+  hard:   { name: "上級", desc: "助言なし。現場の重さで決める", hints: false },
+};
+
+// 用語の一言注釈(初級のみ表示)
+const GLOSS = {
+  "バックアップ": "データの控え。壊れても戻せるように別に取っておいた写し。",
+  "オフライン": "ネットから切り離した状態。遠くから触られなくなる。",
+  "VPN": "外から社内ネットに入るための専用の通り道。",
+  "標的型メール": "特定の相手をだますために作り込まれたメール。",
+  "脆弱性": "ソフトの弱点。放置すると入口になる。",
+  "ログ": "いつ誰が何をしたかの記録。",
+  "ランサムウェア": "データを人質に身代金を要求する不正プログラム。",
+  "多要素認証": "パスワードに加えて、もう一つ本人確認を足す仕組み。",
+  "権限": "できることの範囲。広いほど、乗っ取られたとき被害が大きい。",
+  "横展開": "一度入った後、ネット内の別の機器へ次々と移っていくこと。",
+  "ディープフェイク": "AIで作った、本物そっくりの偽の顔や声の映像・音声。",
+  "コールバック": "受けた連絡をうのみにせず、登録済みの公式番号へ自分から折り返して本人確認すること。",
+  "資金洗浄": "犯罪で得たお金を、複数の口座などを経由させて出所を分からなくすること。ロンダリング。",
+};
+
+/* 各場面の「端末ログ」(演出・抽象化。実在のコマンドではない)と、専門家の助言 */
+const TERM = {
+  "hospital:defend:start": ["soc> 監視アラート: 広域のファイル暗号化を検知", "ir> 状態: 電子カルテ=応答なし / プリンタ=連続出力"],
+  "hospital:defend:contain": ["ir> 実行: 院内ネットワークを物理分離", "soc> 拡散: 停止(未感染端末を隔離)"],
+  "hospital:defend:spread": ["soc> 警告: 暗号化が検査部サーバへ波及", "ir> ネットワーク分離まで 00:46 経過"],
+  "hospital:defend:pay": ["ir> 交渉チャネル: 身代金要求を確認", "note> 専門機関の指針: 安易な支払いは非推奨"],
+  "hospital:defend:paper": ["ops> 代替運用: 紙カルテ・口頭申し送りへ切替", "status> 診療継続=維持(急患・定期薬 対応可)"],
+  "hospital:defend:backup_fail": ["backup> 復元ポイント: すべて暗号化 → 復元不可", "status> 外来=大幅停止 / 復旧見込み=数週間"],
+  "hospital:attack:start": ["recon> 対象選定: 小規模医療機関", "recon> 露出面: 旧VPN機器 / 保守経路を確認"],
+  "hospital:attack:foothold": ["access> 侵入: 未更新の外部機器経由", "log> 監視: 院内ログの確認者=なし"],
+  "hospital:attack:mail": ["lure> 送信: 業務を装う添付(夜勤帯)", "access> 足場: 1端末から広域に到達可"],
+  "hospital:attack:hardtarget": ["recon> 対象: 大規模病院", "assess> 更新・監視・訓練あり → 費用対効果=低"],
+  "hospital:attack:atk_win": ["move> 横展開: 管理権限まで到達", "impact> 実行: バックアップ掌握後に一斉暗号化"],
+  "hospital:attack:atk_noticed": ["move> 挙動: 大きく速い → 検知されやすい", "defense> 残業者が異常検知 → ネットワーク遮断"],
+  "pension:defend:start": ["mail> 検知: 複数職員に同一の不審添付", "soc> 相談受付: 「開いたかも」1件"],
+  "pension:defend:isolate": ["ir> 実行: 該当端末を隔離 / 全体へ一斉周知", "data> 発見: 個人情報の平文コピー(共有フォルダ)"],
+  "pension:defend:slow": ["soc> 経過: 端末から外部通信が継続中", "ir> 判断保留のまま 数時間経過"],
+  "pension:defend:hide": ["ir> 対応: 内々処理(周知なし)", "soc> 感染: 他端末へ静かに拡大"],
+  "pension:defend:good_data": ["data> 状態: 暗号化+アクセス最小化", "impact> 流出=ごく少量 / 影響者へ速報"],
+  "pension:defend:leak": ["ir> 公表: 流出範囲を特定し通知・窓口設置", "status> 信頼=回復に着手"],
+  "pension:defend:cover": ["ext> 外部指摘により発覚", "status> 被害拡大+隠蔽で信頼を大きく毀損"],
+  "pension:attack:start": ["plan> 狙い: 大量の個人情報", "recon> 弱点: 正面は堅牢 / 人と置き場所に隙"],
+  "pension:attack:in": ["lure> 成立: 1名が添付を開封", "recon> 発見: 作業用の平文コピーが散在"],
+  "pension:attack:wall": ["assess> 正面システム=堅牢 → 力押しは非効率", "plan> 撤退: より楽な隙を探索"],
+  "pension:attack:atk_leak": ["collect> 取得: 散在する平文から大量", "note> 置き場所の油断=最大の穴"],
+  "pension:attack:atk_blocked": ["access> 本体=暗号化+権限制限", "result> 持ち出し=失敗"],
+  "port:defend:start": ["scada> 中核: コンテナ管理システム=起動不可", "ir> 画面=身代金要求 / トラック滞留 増加中"],
+  "port:defend:triage": ["ir> 実行: 搬出入を全面停止し切り分け", "backup> 復旧=時間を要する"],
+  "port:defend:keep": ["soc> 波及: 関連システムに異常", "ir> 切り分け難化 / 復旧見込み後退"],
+  "port:defend:coordinate": ["ir> 手作業切替=完了 / だが人手・情報 不足", "coord> 鉄道・トラック・税関と要調整"],
+  "port:defend:strain": ["ops> 自前運用 → 追いつかず", "status> 港=稼働 / 遅れと混乱 拡大"],
+  "port:defend:manual": ["ops> 代替: 手作業・紙伝票で優先貨物から", "status> 数日で通常運用へ復帰"],
+  "port:defend:wait": ["ops> 代替手段=なし", "status> 港=停止継続 / 荷主へ影響拡大"],
+  "port:attack:start": ["recon> 狙い: 止まると困る社会インフラ", "recon> 接近: 保守・遠隔経路 / 取引先経由"],
+  "port:attack:reach": ["access> 到達: 外部接続点から中核へ", "monitor> 監視が機能すれば検知され得る"],
+  "port:attack:hard": ["assess> 接続点=更新・監視あり / 代替運用あり", "plan> 撤退: 圧力が効かない"],
+  "port:attack:atk_stop": ["impact> 実行: 中核停止 → 物流まひ", "note> 接続点の守り+代替運用で防げた被害"],
+  "port:attack:atk_caught": ["monitor> 検知: 中核への不審な接近", "defense> 接続点を遮断 → 実行前に阻止"],
+  "deepfake:defend:start": ["call> 着信: 役員名義の緊急ビデオ会議", "req> 指示: 即時振込 / メール・LINE禁止 / 極秘"],
+  "deepfake:defend:verify": ["ir> 実行: 公式番号へコールバック", "result> 本人=会議を認識せず → 偽"],
+  "deepfake:defend:detect": ["ai> 解析: 口と音声の同期に乱れ / インカメラ映像を精査", "osint> 素材: SNS公開の講演動画と一致"],
+  "deepfake:defend:caught_win": ["ir> 振込=実行前に停止", "ops> 対応: 公開動画の削除申請 / 全社へ注意喚起"],
+  "deepfake:defend:half_sent": ["bank> 一部振込=実行済 → 追跡・一部凍結", "status> 残額=停止 / 全損は回避"],
+  "deepfake:defend:money_gone": ["bank> 振込=実行 → 海外口座へ多重転送", "trace> 資金洗浄(ロンダリング) / 容疑者=逃走"],
+  "deepfake:attack:start": ["osint> 収集: SNS・動画から役員の顔/声", "recon> 在席: 公開投稿・位置情報から多忙な時間帯を特定"],
+  "deepfake:attack:build": ["synth> 生成: 顔+声のディープフェイク(作業部屋)", "stage> 偽ビデオ会議を設営 / 録画素材を調整"],
+  "deepfake:attack:done": ["push> 指示: 期限を切り振込を急かす", "exit> 資金: 多重口座→海外(ロンダリング) / 逃走"],
+  "deepfake:attack:foiled": ["defense> 相手=公式番号へコールバック", "result> 偽と露見 → 振込なし"],
+  "deepfake:attack:rough": ["synth> 生成=粗い(口と音の同期ズレ)", "defense> 違和感で確認 → 露見"],
+  "deepfake:attack:give": ["assess> 相手=複数承認+コールバック", "plan> 断念"],
+  "grid:defend:start": ["scada> 警報: 遮断器が遠隔指令で開動作", "log> 不審: 発信元不明の制御コマンド"],
+  "grid:defend:manual_prep": ["ir> 実行: 遠隔指令を遮断 / 各変電所へ出動", "ops> 手動運転: 送電を維持"],
+  "grid:defend:investigate": ["soc> 解析中… 遮断器が複数 開 → 一部停電", "ext> 鉄道=停止 / 信号=滅灯"],
+  "grid:defend:ignore": ["scada> 遮断器 連続 開 → 停電 拡大中", "ext> 鉄道・暖房・信号 連鎖停止"],
+  "grid:defend:hold": ["ops> 手動運転: 病院・鉄道を優先維持", "status> 停電=局所 / 復旧後に経路を封鎖"],
+  "grid:defend:overload": ["ops> 一括復旧 → 負荷偏り", "status> 一部停電 → すぐ回復"],
+  "grid:defend:partial_restore": ["ops> 手動切替: 優先地域から復旧", "status> 一部地域=数時間停電"],
+  "grid:defend:blackout": ["scada> 広域停電 確定", "status> 鉄道停止・信号滅灯・暖房喪失"],
+  "grid:attack:start": ["recon> 狙い: 電力=社会の電源", "recon> 連鎖: 鉄道・通信・暖房が同時に止まる"],
+  "grid:attack:reach": ["access> 到達: 保守経路から制御網へ", "target> 遮断器 遠隔操作が可能"],
+  "grid:attack:social": ["lure> 運用員から認証を取得", "access> 制御網に接続"],
+  "grid:attack:give": ["assess> 監視・多要素・手動運転あり", "plan> 断念(落としても即復旧)"],
+  "grid:attack:done": ["impact> 遮断器 一斉 開 → 広域停電", "exit> 社会混乱 / 圧力 最大"],
+  "grid:attack:caught": ["monitor> 制御網への接近を検知", "defense> 遠隔経路を遮断 → 実行前に阻止"],
+  "grid:attack:blocked": ["access> 認証=取得", "defense> 多要素+手順 → 制御に届かず"],
+  "hospital:defend:eradicate": ["ir> 走査: 侵入経路・残存アクセスを探索", "soc> 判定: 裏口の有無を確認中"],
+  "hospital:defend:restore_plan": ["ops> 復旧: 優先度順に段階復元", "comm> 公表: 患者・地域へ状況説明"],
+  "hospital:attack:escalate": ["move> 昇格: 管理者権限を奪取", "recon> 横展開: 全端末へ到達可"],
+  "hospital:attack:locate_backup": ["recon> 探索: バックアップの所在を特定", "assess> 控え=同一ネット上 → 掌握可能"],
+  "pension:defend:scope_leak": ["ir> 解析: アクセスログから流出範囲を特定", "data> 対象: 件数・項目を精査中"],
+  "pension:defend:disclose": ["comm> 通知: 影響者へ速報 / 相談窓口 開設", "note> 二次被害(なりすまし)への注意喚起"],
+  "pension:attack:hunt_copies": ["recon> 探索: 共有フォルダの平文コピー", "assess> 本体=暗号化+制限 → 回避し写しを狙う"],
+  "pension:attack:exfil": ["collect> 搬出: 外向き通信で段階持ち出し", "monitor> 出口監視あれば検知され得る"],
+  "port:defend:restore_order": ["ir> 復旧: 安全確認済み系から段階的に", "ops> 優先: 冷蔵・医薬・救援を先行"],
+  "port:attack:persist": ["access> 潜伏: 中核に居座り時機を待機", "monitor> 接続点監視あれば検知され得る"],
+  "port:attack:trigger": ["impact> 実行: ピーク時に中核停止を企図", "assess> 代替運用あれば打撃=限定的"],
+  "deepfake:defend:callback": ["ir> 操作: 会議を離脱し公式番号へ発信", "req> 相手: 期限を切り急かし継続"],
+  "deepfake:defend:contain_fraud": ["ir> 確定: 本人が指示を否認 → 偽", "ops> 手当: 全社周知 / 公開素材の削除 / 通報"],
+  "deepfake:attack:rehearse": ["stage> 筋書き: 極秘・至急・記録禁止を設定", "assess> 目的: 確認の隙を消す"],
+  "deepfake:attack:pressure": ["push> 圧力: 情と期限で畳みかけ", "risk> コールバックされれば偽と露見"],
+  "grid:defend:seal_route": ["ir> 遮断: 保守・遠隔経路を閉鎖", "auth> 強化: 多要素認証を再設定"],
+  "grid:defend:coordinate_grid": ["coord> 連携: 鉄道・自治体・近隣事業者", "ops> 配分: 優先順位をそろえ手動維持"],
+  "grid:attack:map_grid": ["recon> 構成解析: 連鎖の起点となる遮断器", "monitor> 制御系監視あれば露見し得る"],
+  "grid:attack:time_attack": ["impact> 企図: 需要ピークに一斉遮断", "assess> 手動運転あれば停電=短期化"],
+};
+
+const ADVISOR = {
+  "hospital:defend:start": { who: "分析官", line: "広がり方からしてランサムです。まず線を切る判断を。" },
+  "hospital:defend:contain": { who: "司令塔(CISO)", line: "止血は成功。次はバックアップの生死を確かめて。" },
+  "hospital:defend:spread": { who: "ネットワーク班", line: "波及しています。残りを守るため今すぐ分離を。" },
+  "hospital:defend:pay": { who: "法務・広報", line: "支払いは警察・専門機関に相談してから。独断は危険です。" },
+  "hospital:defend:paper": { who: "現場対応", line: "紙で回せています。急患から優先で捌きます。" },
+  "hospital:defend:backup_fail": { who: "司令塔(CISO)", line: "復元できません。長期戦の覚悟と外部支援の要請を。" },
+  "hospital:attack:start": { who: "偵察屋", line: "小さい所ほど担当は一人。更新漏れが狙い目だ。" },
+  "hospital:attack:foothold": { who: "司令塔(戦略家)", line: "誰も見ていない。急がず、控えの在りかから潰せ。" },
+  "hospital:attack:mail": { who: "脚本家", line: "夜勤明けに刺さる文面を書いた。一人開けば十分だ。" },
+  "hospital:attack:hardtarget": { who: "司令塔(戦略家)", line: "ここは割に合わない。労力とリスクが見合わん。" },
+  "hospital:attack:atk_win": { who: "横展開屋", line: "管理権限まで取った。守る側は戻す手を失う。" },
+  "hospital:attack:atk_noticed": { who: "司令塔(戦略家)", line: "派手すぎた。気づかれれば線を切られて終わりだ。" },
+  "pension:defend:start": { who: "分析官", line: "一人が開いたは全体の合図。疑わしきは即隔離を。" },
+  "pension:defend:isolate": { who: "情報管理", line: "平文コピーが散らばっています。触れる範囲を絞って。" },
+  "pension:defend:slow": { who: "分析官", line: "確認の間に外へ送られます。調べるのは切り離した後で。" },
+  "pension:defend:hide": { who: "法務・広報", line: "隠すと後で二重に失います。今すぐ開示の準備を。" },
+  "pension:defend:good_data": { who: "司令塔(CISO)", line: "守り方が効きました。影響者への通知を速やかに。" },
+  "pension:defend:leak": { who: "法務・広報", line: "隠さず速く出せました。窓口と注意喚起を続けます。" },
+  "pension:defend:cover": { who: "司令塔(CISO)", line: "露見しました。遅れが不信を長く残します。" },
+  "pension:attack:start": { who: "司令塔(戦略家)", line: "正面は無理に攻めるな。人と置き場所の隙を突く。" },
+  "pension:attack:in": { who: "脚本家", line: "一人開いた。本体より、作業用コピーを探せ。" },
+  "pension:attack:wall": { who: "司令塔(戦略家)", line: "ここは締まっている。楽な相手へ切り替えだ。" },
+  "pension:attack:atk_leak": { who: "出口屋", line: "散らばった平文から大量に抜けた。置き場所の油断だ。" },
+  "pension:attack:atk_blocked": { who: "侵入屋", line: "本体は暗号化され権限も絞られている。抜けない。" },
+  "port:defend:start": { who: "司令塔(CISO)", line: "中核がやられました。広げないため一度止める判断を。" },
+  "port:defend:triage": { who: "現場対応", line: "止めました。手作業で回せるかが今日の勝負です。" },
+  "port:defend:keep": { who: "ネットワーク班", line: "動かしたまま波及しています。全面停止で立て直しを。" },
+  "port:defend:coordinate": { who: "司令塔(CISO)", line: "自前では回りません。関係機関と取引先に、今すぐ連携要請を。" },
+  "port:defend:strain": { who: "経営", line: "抱え込みました。連携していれば、もっと軽くすんだ。" },
+  "port:defend:manual": { who: "現場対応", line: "紙伝票で優先貨物から再開。港は死なせません。" },
+  "port:defend:wait": { who: "経営", line: "回す術がなかった。ここが最大の課題として残ります。" },
+  "port:attack:start": { who: "司令塔(戦略家)", line: "止まると困る所ほど早く払う。インフラは好餌だ。" },
+  "port:attack:reach": { who: "偵察屋", line: "保守経路から中核に届いた。見張りがいなければだが。" },
+  "port:attack:hard": { who: "司令塔(戦略家)", line: "止めても早く戻される。圧力にならん、やめだ。" },
+  "port:attack:atk_stop": { who: "司令塔(戦略家)", line: "社会が止まった。影響が大きいほど圧力は強い。" },
+  "port:attack:atk_caught": { who: "横展開屋", line: "実行前に遮断された。見張りが機能していた。" },
+  "deepfake:defend:start": { who: "分析官", line: "至急・極秘・記録を残すな。詐欺の三点セットです。まず折り返しを。" },
+  "deepfake:defend:verify": { who: "司令塔(CISO)", line: "画面の本人は信じない。登録番号への折り返しが唯一の確証です。" },
+  "deepfake:defend:detect": { who: "ホワイトハッカー", line: "口と音がズレています。SNSの講演動画が素材でしょう。" },
+  "deepfake:defend:caught_win": { who: "法務・広報", line: "未然に防げました。使われた公開動画の削除申請も進めます。" },
+  "deepfake:defend:half_sent": { who: "警察・サイバー班", line: "一部は凍結できました。振込直後の通報が分かれ目です。" },
+  "deepfake:defend:money_gone": { who: "警察・サイバー班", line: "資金は海外へ多重転送。回収は困難、捜査に移ります。" },
+  "deepfake:attack:start": { who: "脚本家", line: "顔も声もSNSに落ちている。本人を作るのは造作もない。" },
+  "deepfake:attack:build": { who: "司令塔(戦略家)", line: "画面は完璧だ。あとは折り返す隙を与えるな。" },
+  "deepfake:attack:done": { who: "出口屋", line: "振り込ませた。多重口座で洗って消える。追えまい。" },
+  "deepfake:attack:foiled": { who: "司令塔(戦略家)", line: "折り返された。別経路の確認には勝てん。" },
+  "deepfake:attack:rough": { who: "脚本家", line: "急ぎすぎた。同期のズレを見抜かれた。" },
+  "deepfake:attack:give": { who: "司令塔(戦略家)", line: "複数承認とコールバック。ここは割に合わん。" },
+  "grid:defend:start": { who: "司令塔(CISO)", line: "制御を奪われています。まず遠隔を断ち、人の手に戻す判断を。" },
+  "grid:defend:manual_prep": { who: "現場対応", line: "各変電所に向かいます。手動で送電を保ちます。" },
+  "grid:defend:investigate": { who: "ネットワーク班", line: "調べる間に開かれました。今すぐ手動へ。" },
+  "grid:defend:ignore": { who: "ネットワーク班", line: "様子見は致命的です。闇が広がっています。" },
+  "grid:defend:hold": { who: "経営", line: "病院と鉄道を守れました。平時の訓練が効きました。" },
+  "grid:defend:overload": { who: "現場対応", line: "欲張りました。優先順位どおり戻すべきでした。" },
+  "grid:defend:partial_restore": { who: "現場対応", line: "拡大は止めました。残りを急いで復旧します。" },
+  "grid:defend:blackout": { who: "経営", line: "取り戻すのが遅すぎた。社会への影響が重い。" },
+  "grid:attack:start": { who: "司令塔(戦略家)", line: "電源を落とせば、鉄道も通信も連鎖で止まる。効果は絶大だ。" },
+  "grid:attack:reach": { who: "偵察屋", line: "保守経路から制御網へ。見張りがいなければ、だが。" },
+  "grid:attack:social": { who: "脚本家", line: "運用員を一押しで落とした。あとは多要素の壁だけ。" },
+  "grid:attack:give": { who: "司令塔(戦略家)", line: "すぐ手動で戻される。圧力にならん、やめだ。" },
+  "grid:attack:done": { who: "司令塔(戦略家)", line: "都市が暗転した。影響が大きいほど、圧力は強い。" },
+  "grid:attack:caught": { who: "横展開屋", line: "遮断の前に捉えられた。監視が生きていた。" },
+  "grid:attack:blocked": { who: "侵入屋", line: "認証は取ったが、多要素で制御に届かん。" },
+  "hospital:defend:eradicate": { who: "フォレンジック", line: "経路と裏口を潰してからです。残すと必ず戻ってきます。" },
+  "hospital:defend:restore_plan": { who: "司令塔(CISO)", line: "命に近い所から順に。隠さず伝えれば、信頼は戻せます。" },
+  "hospital:attack:escalate": { who: "横展開屋", line: "権限さえ取れば、どこにでも手が届く。分離がなければな。" },
+  "hospital:attack:locate_backup": { who: "司令塔(戦略家)", line: "控えを先に押さえろ。戻せなければ、相手は折れる。" },
+  "pension:defend:scope_leak": { who: "分析官", line: "あいまいな公表は不信を生みます。範囲を正確に固めて。" },
+  "pension:defend:disclose": { who: "法務・広報", line: "影響者に先に、窓口と一緒に。誠実さが回復の近道です。" },
+  "pension:attack:hunt_copies": { who: "偵察屋", line: "本体は諦めろ。作業用の写しが、どこかに必ず残っている。" },
+  "pension:attack:exfil": { who: "出口屋", line: "少しずつ運ぶ。出口を見張られていなければ、気づかれん。" },
+  "port:defend:restore_order": { who: "現場対応", line: "一括は危険です。確かめた所から、急ぐ荷を先に。" },
+  "port:attack:persist": { who: "偵察屋", line: "今止めるな。いちばん効く時刻まで、静かに待つ。" },
+  "port:attack:trigger": { who: "司令塔(戦略家)", line: "ピークを狙え。だが手作業で回されれば、空振りだ。" },
+  "deepfake:defend:callback": { who: "司令塔(CISO)", line: "急かしは手口です。会議の外へ出て、登録番号へ。" },
+  "deepfake:defend:contain_fraud": { who: "法務・広報", line: "止めて終わりにしない。同じ手口が別の社員にも向きます。" },
+  "deepfake:attack:rehearse": { who: "脚本家", line: "考える時間を与えるな。極秘と期限で塗りつぶす。" },
+  "deepfake:attack:pressure": { who: "司令塔(戦略家)", line: "あと一押しだ。だが折り返されたら、終わりだぞ。" },
+  "grid:defend:seal_route": { who: "ホワイトハッカー", line: "入口が開いたままでは、また奪われます。経路を断って。" },
+  "grid:defend:coordinate_grid": { who: "司令塔(CISO)", line: "一制御室では守れません。社会と優先順位を合わせて。" },
+  "grid:attack:map_grid": { who: "偵察屋", line: "闇雲に開くな。連鎖の起点を一つ、見極めろ。" },
+  "grid:attack:time_attack": { who: "司令塔(戦略家)", line: "いちばん寒い刻を狙え。手動で戻されなければ、だが。" },
+};
+
+/* 各 (scenario, role) は start から始まる分岐。end: で結末キーへ。
+   結末は computeEnding() で damage/trust から判定(win/mix/loss)。*/
+
+const SCRIPTS = {
+  "hospital:defend": {
+    start: {
+      clock: "AM 0:24 · 当直",
+      h: "カルテが、ぜんぶ開かない",
+      body: [
+        "当直の看護師から内線。「電子カルテが真っ赤な英語の画面になって、何も出せません」。あなたは病院の情報システムを一人で見てきた事務職員だ。",
+        "画面には身代金を要求する文面。プリンタからも同じ紙が吐き出され続けている。朝になれば外来が始まる。"
+      ],
+      choices: [
+        { k: "まず院内ネットの線を物理的に抜く", d: "広がりを止める。ただし一部の機器も止まる", tag: "封じ込め", fx: { dmg: -5, trust: 0 }, next: "contain" },
+        { k: "復旧業者と院長にすぐ電話する", d: "応援を呼ぶ。線はまだ抜かない", tag: "連絡", fx: { dmg: +12, trust: +3 }, next: "spread" },
+        { k: "身代金の額を確かめ、払う相談をする", d: "早く戻したい", tag: "交渉", fx: { dmg: +8, trust: -8 }, next: "pay" },
+      ],
+    },
+    contain: {
+      clock: "AM 0:41",
+      fb: { t: "ok", s: "正解に近い一手", m: "広がりを止めるのが最優先。感染は<b>ネット越し</b>に他の端末へ移る。線を抜けば、まだ無事な端末を守れる。" },
+      h: "止めた。でも、戻せるのか",
+      body: [
+        "ネットを切り、被害の拡大は止まった。問題は<b>バックアップ</b>。カルテを戻すための控えが要る。",
+        "確認すると——バックアップ機も院内ネットにつながっていた。同じように暗号化されている可能性が高い。"
+      ],
+      choices: [
+        { k: "紙の記録と記憶で、まず急患だけ回す体制に切替", d: "ITが戻る前提を捨て、人で回す", tag: "事業継続", fx: { dmg: -8, trust: +10 }, next: "eradicate" },
+        { k: "バックアップ機だけ必死に復旧を試す", d: "IT復旧に賭ける", tag: "復旧", fx: { dmg: +6, trust: -4 }, next: "backup_fail" },
+      ],
+    },
+    spread: {
+      clock: "AM 1:10",
+      fb: { t: "bad", s: "ここで時間を使った", m: "電話は大事だが、<b>線を抜く前</b>の数十分で感染は他の端末へ広がる。連絡と封じ込めは同時に、封じ込めを先に。" },
+      h: "被害が、検査システムまで",
+      body: [
+        "電話している間に、暗号化は検査部門のサーバへ達した。止められる範囲が狭まっていく。",
+        "ようやくネットを切ったが、失ったものは増えた。"
+      ],
+      choices: [
+        { k: "紙運用へ切替え、外来を縮小して急患優先", d: "被害を受け入れ、人で回す", tag: "事業継続", fx: { dmg: -4, trust: +6 }, next: "paper" },
+        { k: "とにかく全サーバの復旧を業者に丸投げ", d: "IT復旧に賭ける", tag: "復旧", fx: { dmg: +6, trust: -6 }, next: "backup_fail" },
+      ],
+    },
+    pay: {
+      clock: "AM 1:30",
+      fb: { t: "bad", s: "立ち止まって", m: "身代金を払っても<b>戻る保証はなく</b>、犯罪者の資金源になる。警察・専門機関への相談が先。多くの指針が安易な支払いを勧めていない。" },
+      h: "払っても、鍵は来るのか",
+      body: [
+        "やり取りを始めたが、相手の言い値は上がり、本当に戻せるかは誰も保証しない。時間だけが過ぎる。",
+        "結局、復旧は自力でやるしかないと気づく。最初から動いていれば——"
+      ],
+      choices: [
+        { k: "支払いをやめ、紙運用で急患優先に切替える", d: "損切りして現実的な運用へ", tag: "事業継続", fx: { dmg: -2, trust: +4 }, next: "paper" },
+        { k: "それでも支払い、鍵を待つ", d: "賭け続ける", tag: "交渉", fx: { dmg: +14, trust: -10 }, next: "backup_fail" },
+      ],
+    },
+    paper: {
+      clock: "AM 6:00 · 外来前",
+      end: "win",
+      h: "人の手で、朝を迎える",
+      body: [
+        "手書きの問診票、口頭の申し送り、電卓での会計。不便だが、急患も定期薬も止めずにすんだ。町の人に「うちの病院は診てくれた」と思ってもらえる。",
+        "復旧は数週間かかる見込み。だが一番大事な「診療を止めない」は守れた。"
+      ],
+      choices: [
+        { k: "ここまでの判断を振り返る", d: "結果を見る", tag: "終了", fx: {}, next: "END" },
+      ],
+    },
+    backup_fail: {
+      clock: "AM 7:00 · 外来前",
+      end: "loss",
+      h: "戻らないまま、朝が来た",
+      body: [
+        "バックアップも暗号化され、復旧の目処は立たない。紙への切替も遅れ、外来は大幅に止まった。",
+        "町の患者は近隣の病院へ。信頼を取り戻すには長い時間がかかる。"
+      ],
+      choices: [
+        { k: "ここまでの判断を振り返る", d: "結果を見る", tag: "終了", fx: {}, next: "END" },
+      ],
+    },
+    eradicate: {
+      clock: "AM 1:05",
+      fb: { t: "ok", s: "止めた後が、本番", m: "線を切っても、相手が残した<b>裏口</b>が残れば再発する。つなぎ直す前に、潜伏の有無と侵入経路を確かめる。" },
+      h: "まだ、中にいないか",
+      body: [
+        "拡大は止めた。だが、どこから入られ、<b>攻撃者の足がかり</b>が残っていないかが分からないままでは、戻しても再発する。",
+        "復旧業者と手分けして、感染の範囲と侵入経路を洗い出す。"
+      ],
+      choices: [
+        { k: "侵入経路と潜伏を洗い出し、安全を確かめてから復旧へ", d: "急がば回れ", tag: "範囲特定", fx: { dmg: -6, trust: +6 }, next: "restore_plan" },
+        { k: "気にせず、すぐ元通りにつなぎ直す", d: "早さ優先", tag: "拙速", fx: { dmg: +10, trust: -6 }, next: "backup_fail" },
+      ],
+    },
+    restore_plan: {
+      clock: "AM 3:30",
+      fb: { t: "ok", s: "戻す順番が、被害を分ける", m: "全部を一度に戻すと、再汚染や取りこぼしが起きる。<b>優先度の高い診療から段階的に</b>、記録を取りながら戻す。" },
+      h: "どこから、灯をともすか",
+      body: [
+        "経路をふさぎ、安全を確認。次は復旧の順番だ。急患・薬・会計——命に近い所から、確かめながら戻す。",
+        "同時に、患者と地域にどう伝えるかも決める。"
+      ],
+      choices: [
+        { k: "命に関わる診療から段階復旧し、状況を正直に公表", d: "順序と誠実さ", tag: "段階復旧", fx: { dmg: -6, trust: +8 }, next: "paper" },
+        { k: "全系統を一気に戻し、公表は様子見", d: "一括・沈黙", tag: "拙速", fx: { dmg: +8, trust: -8 }, next: "backup_fail" },
+      ],
+    },
+    _learn: [
+      "被害拡大はネット越しに進む。異常に気づいたら、連絡と<b>封じ込め(線を切る)</b>を同時に、封じ込めを優先。",
+      "<b>バックアップはオフラインにも持つ</b>。本番と同じネットにつないだ控えは、一緒にやられる。",
+      "最悪ITが戻らない前提の「紙で回す」段取り(事業継続計画)を、平時に決めておく。",
+      "身代金は戻る保証がなく資金源になる。まず警察・専門機関へ。",
+    ],
+    _src: '<b>さくら町立病院</b>は架空。下敷き:徳島県つるぎ町立半田病院のランサムウェア被害(2021年10月)と有識者会議の調査報告書。バックアップも被災し、新規患者の受け入れが約2か月停止した点が教訓として公表されている。出典:<a href="https://scan.netsecurity.ne.jp/article/2022/06/28/47803.html" target="_blank" rel="noopener">ScanNetSecurity(調査報告書公開の報道)</a>。',
+  },
+
+  "hospital:attack": {
+    start: {
+      clock: "偵察フェーズ",
+      h: "いちばん弱い入口を探す",
+      body: [
+        "あなたは侵入を企てる側の視点に立つ(※操作はすべて抽象化されたゲーム内の選択)。狙うのは守りが手薄な組織。",
+        "小さな町立病院は、担当者が一人で、更新が後回しになりがちだと「見える」。どこから入るか。"
+      ],
+      choices: [
+        { k: "外部から入れる古い通り道(VPN機器)の弱点を探す", d: "更新されていない入口を狙う", tag: "入口", fx: { dmg: +10, trust: 0 }, next: "foothold" },
+        { k: "職員に偽メールを送る", d: "人の油断を突く", tag: "だまし", fx: { dmg: +6, trust: 0 }, next: "mail" },
+        { k: "よく守られた大病院を狙う", d: "狙いを変える", tag: "判断", fx: { dmg: -20, trust: 0 }, next: "hardtarget" },
+      ],
+    },
+    foothold: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "古い<b>VPN機器の脆弱性</b>は現実に侵入経路になってきた。守る側は「外から入れる機器の更新」を最優先にすべき、と裏返しで分かる。" },
+      h: "入れてしまった",
+      body: [
+        "放置された弱点から中へ。だが院内の記録(<b>ログ</b>)を見られれば足取りが残る。見張りがいるか。",
+        "——この病院は、誰も記録を見ていなかった。"
+      ],
+      choices: [
+        { k: "ゆっくり広がり、バックアップの所在を先に調べる", d: "控えごと潰す狙い", tag: "拡散", fx: { dmg: +18, trust: 0 }, next: "escalate" },
+        { k: "すぐ暗号化を始める(派手・早い)", d: "気づかれるが速い", tag: "実行", fx: { dmg: +4, trust: 0 }, next: "atk_noticed" },
+      ],
+    },
+    mail: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "偽メールは一人でも開けば入口になる。守る側は<b>訓練</b>と、開いても広がらない備え(権限の分離)で効く。" },
+      h: "一人が、開いた",
+      body: [
+        "夜勤明けの職員が添付を開いた。そこから中へ。だが権限が分かれていれば、動ける範囲は狭い。",
+        "この病院では、一つの端末から多くに手が届いた。"
+      ],
+      choices: [
+        { k: "権限を広げ、サーバ全体へ回り込む", d: "じっくり支配する", tag: "拡散", fx: { dmg: +16, trust: 0 }, next: "atk_win" },
+        { k: "焦って即実行", d: "速いが雑", tag: "実行", fx: { dmg: +2, trust: 0 }, next: "atk_noticed" },
+      ],
+    },
+    hardtarget: {
+      clock: "偵察フェーズ",
+      end: "atk_deterred",
+      fb: { t: "ok", s: "これが抑止", m: "守りが堅い組織は「割に合わない」と見なされ狙われにくい。<b>更新・監視・訓練</b>が揃うと、攻撃者は別を探す——それが守りの価値。" },
+      h: "ここは、割に合わない",
+      body: [
+        "大病院は入口が更新され、記録も見張られ、職員は怪しいメールを報告する。入っても即気づかれ、広がれない。",
+        "攻撃者は、手間とリスクが見合わない相手を避ける。狙いを外した。"
+      ],
+      choices: [
+        { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" },
+      ],
+    },
+    atk_win: {
+      clock: "実行フェーズ",
+      end: "atk_success",
+      h: "気づかれる前に、控えごと",
+      body: [
+        "見張りのいない院内で、ゆっくり全体に回り込み、バックアップの場所も押さえてから一斉に実行した。守る側は戻す手段を失う。",
+        "——これは「守る側が何を怠ると、こうなるか」の裏返しだ。"
+      ],
+      choices: [
+        { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" },
+      ],
+    },
+    atk_noticed: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "派手で早い動きは<b>気づかれやすい</b>。異常にすぐ反応して線を切れる組織は、被害を小さくできる。" },
+      h: "早すぎて、気づかれた",
+      body: [
+        "派手に動いたため、たまたま残業していた職員がおかしさに気づき、ネットの線を抜いた。広がりは途中で止まった。",
+        "守る側の素早い一手が、被害を半分にした。"
+      ],
+      choices: [
+        { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" },
+      ],
+    },
+    escalate: {
+      clock: "横展開フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "一度入った後の<b>権限昇格と横展開</b>は、権限の分離と監視で止まる。守る側は『入られた後に広がらせない』設計を。" },
+      h: "奥の、鍵束へ",
+      body: [
+        "誰も記録を見ていない院内を、ゆっくり奥へ。管理者の権限を握れば、どの端末にも手が届く。",
+        "——権限が分けられ、記録を見る人がいれば、ここで止まっていた。"
+      ],
+      choices: [
+        { k: "管理権限を奪い、全体に手を伸ばす", d: "支配を広げる", tag: "昇格", fx: { dmg: +12, trust: 0 }, next: "locate_backup" },
+        { k: "焦って痕跡を残し、動きが大きくなる", d: "雑になる", tag: "露見", fx: { dmg: -10, trust: 0 }, next: "atk_noticed" },
+      ],
+    },
+    locate_backup: {
+      clock: "実行準備フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "攻撃者は<b>控え(バックアップ)の在りか</b>を先に探す。オフラインの控えがあれば、戻す手段は守られる。" },
+      h: "戻す手段を、先に断つ",
+      body: [
+        "暗号化の前に、復旧の命綱である<b>控え</b>の場所を突き止める。同じネットにあれば、まとめて人質にできる。",
+        "——控えをネットから切り離していれば、この一手は効かない。"
+      ],
+      choices: [
+        { k: "ネット上の控えごと押さえてから一斉実行", d: "戻す道を断つ", tag: "実行", fx: { dmg: +12, trust: 0 }, next: "atk_win" },
+        { k: "控えを探さず先に暗号化を始める", d: "詰めが甘い", tag: "拙速", fx: { dmg: -8, trust: 0 }, next: "atk_noticed" },
+      ],
+    },
+    _learn: [
+      "狙われやすいのは「更新が後回し」「見張りがいない」「権限が分かれていない」組織。裏返せば守りの優先順位。",
+      "外から入れる機器(VPNなど)の<b>更新</b>が、現実に最大の入口をふさぐ。",
+      "記録(ログ)を<b>実際に見る</b>人がいて初めて、侵入に気づける。",
+      "偽メールは一人の油断で入る。訓練と、入られても広がらない設計(権限分離)で耐える。",
+    ],
+    _src: '攻める側の視点は、守る側が何を優先すべきかを裏から照らすために置いています。実際の手順は書かず、判断だけを抽象化。下敷き:公立病院のランサムウェア被害(2021)。出典:<a href="https://scan.netsecurity.ne.jp/article/2022/06/28/47803.html" target="_blank" rel="noopener">ScanNetSecurity</a>。',
+  },
+
+  "pension:defend": {
+    start: {
+      clock: "DAY 1 · 10:30",
+      h: "「至急ご確認ください」の添付",
+      body: [
+        "あなたは個人情報を扱う窓口機関の職員。取引先を装ったメールが複数の職員に届いている。件名は巧妙で、本物に見える。",
+        "一人が「開いてしまったかも」と相談に来た。ここからどうするか。"
+      ],
+      choices: [
+        { k: "その端末をネットから切り、全職員に注意を一斉周知", d: "即・封じ込めと共有", tag: "初動", fx: { dmg: -8, trust: +4 }, next: "isolate" },
+        { k: "まず本当に感染か、じっくり調べてから動く", d: "確認を優先", tag: "確認", fx: { dmg: +14, trust: -2 }, next: "slow" },
+        { k: "一人のミスとして内々に処理する", d: "騒ぎにしない", tag: "隠す", fx: { dmg: +18, trust: -12 }, next: "hide" },
+      ],
+    },
+    isolate: {
+      clock: "DAY 1 · 11:15",
+      fb: { t: "ok", s: "良い初動", m: "「一人が開いたかも」は<b>全体の合図</b>。端末を切り離し、同じメールを他が開かないよう即共有するのが被害を分ける。" },
+      h: "大事な名簿は、どこにある",
+      body: [
+        "封じ込めた。次の論点は、何百万人分の個人情報を、どう守るか。本来この情報は限られた人しか触れない場所に、暗号をかけて置くべきもの。",
+        "調べると、作業用に<b>平文のまま</b>共有フォルダへ置かれたコピーがいくつも見つかった。"
+      ],
+      choices: [
+        { k: "不要なコピーを消し、残すものは暗号化・アクセス制限", d: "触れる範囲を最小に", tag: "最小化", fx: { dmg: -10, trust: +8 }, next: "scope_leak" },
+        { k: "今は時間がない、コピーはそのまま調査を続ける", d: "後回し", tag: "後回し", fx: { dmg: +12, trust: -6 }, next: "leak" },
+      ],
+    },
+    slow: {
+      clock: "DAY 1 · 15:40",
+      fb: { t: "bad", s: "遅かった", m: "確認している数時間で、情報は外へ送られうる。<b>疑わしきは隔離</b>が先。調査は切り離した後でできる。" },
+      h: "送られた後だった",
+      body: [
+        "慎重に調べている間に、端末から外部へ通信が続いていた。名簿の一部が持ち出された可能性が高い。",
+        "今からでも、広がりと二次被害を止めるしかない。"
+      ],
+      choices: [
+        { k: "全端末を切り離し、流出範囲を特定して公表準備", d: "被害を認めて正しく動く", tag: "収束", fx: { dmg: -6, trust: +6 }, next: "leak" },
+        { k: "まだ確証がないと公表を遅らせる", d: "様子を見る", tag: "遅延", fx: { dmg: +8, trust: -12 }, next: "cover" },
+      ],
+    },
+    hide: {
+      clock: "DAY 3",
+      fb: { t: "bad", s: "最もまずい", m: "隠すと被害は静かに広がり、後で露見したとき<b>信頼は二重に失われる</b>。セキュリティは「報告しやすさ」で決まる面が大きい。" },
+      h: "静かに、広がっていた",
+      body: [
+        "表沙汰にしなかった数日で感染は他の端末へ。気づいたときには持ち出された情報が増えていた。",
+        "さらに、隠していた事実そのものが後で問題になる。"
+      ],
+      choices: [
+        { k: "今すぐ全部を開示し、正しい手順で収束へ", d: "遅れても誠実に", tag: "収束", fx: { dmg: -4, trust: +2 }, next: "leak" },
+        { k: "まだ伏せておく", d: "隠し続ける", tag: "遅延", fx: { dmg: +10, trust: -14 }, next: "cover" },
+      ],
+    },
+    good_data: {
+      clock: "DAY 2",
+      end: "win",
+      h: "触れる情報が、少なかった",
+      body: [
+        "不要なコピーを消し、残りは暗号化とアクセス制限で守っていた。侵入はあったが、持ち出せた中身はごくわずか。",
+        "影響を受けた人へ速やかに知らせ、二次被害(なりすまし等)の注意喚起もできた。被害を最小に抑えた対応として評価される。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    leak: {
+      clock: "DAY 5",
+      end: "mix",
+      h: "流出は認め、素早く知らせた",
+      body: [
+        "一定数の個人情報が持ち出されたが、流出範囲を特定し、対象者へ知らせ、相談窓口を設け、注意喚起を出した。",
+        "被害は出たものの、隠さず速く動いたことで、信頼の回復は始まっている。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    cover: {
+      clock: "DAY 10",
+      end: "loss",
+      h: "露見して、二重に失った",
+      body: [
+        "伏せている間に被害は拡大し、やがて外部から指摘されて発覚。流出の大きさに加え、「隠していた」ことで信頼を大きく損なった。",
+        "対応の遅れが、組織への不信を長く残す。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    scope_leak: {
+      clock: "DAY 2 · 朝",
+      fb: { t: "ok", s: "どこまで出たかを、正確に", m: "通知も対策も、<b>流出範囲の特定</b>から始まる。ログを追い、何が・誰の情報が・どれだけ外へ出たかを確かめる。" },
+      h: "どこまで、出たのか",
+      body: [
+        "封じ込めと最小化はできた。次は、実際に何が外へ出たかを<b>ログ</b>から正確に突き止める。あいまいな公表は、かえって不信を生む。",
+        "分かった範囲を、誠実にどう知らせるか。"
+      ],
+      choices: [
+        { k: "ログで流出範囲を特定し、通知の準備を進める", d: "事実を固める", tag: "範囲特定", fx: { dmg: -6, trust: +6 }, next: "disclose" },
+        { k: "範囲はあいまいなまま、とりあえず様子を見る", d: "確認を後回し", tag: "後回し", fx: { dmg: +10, trust: -8 }, next: "leak" },
+      ],
+    },
+    disclose: {
+      clock: "DAY 3",
+      fb: { t: "ok", s: "隠さず、早く、正しく", m: "公表は<b>速さと正確さと窓口</b>。影響者に先に知らせ、なりすまし等の二次被害に備えてもらう。" },
+      h: "誰に、どう知らせるか",
+      body: [
+        "範囲が固まった。影響を受ける人へどう伝え、相談窓口と注意喚起をどう出すか。ここで組織の姿勢が問われる。"
+      ],
+      choices: [
+        { k: "影響者へ速やかに通知し、窓口と注意喚起を同時に出す", d: "誠実に、早く", tag: "公表", fx: { dmg: -6, trust: +10 }, next: "good_data" },
+        { k: "問い合わせが来てから個別に対応する", d: "受け身で絞る", tag: "消極", fx: { dmg: +8, trust: -10 }, next: "cover" },
+      ],
+    },
+    _learn: [
+      "「一人が開いたかも」は全体の警報。<b>疑わしきは即隔離</b>+一斉共有が被害を分ける。",
+      "大量の個人情報は、<b>触れる人と場所を最小に</b>。作業用の平文コピーが流出を大きくする。",
+      "確認より封じ込めが先。調べるのは切り離した後でできる。",
+      "起きてしまったら<b>隠さず速く公表</b>。遅れと隠蔽は信頼を二重に失わせる。",
+    ],
+    _src: '<b>国民年金サポート機構</b>は架空。下敷き:日本年金機構の不正アクセスによる個人情報流出(2015年、約125万件)。標的型メールの添付が発端で、本来アクセス制限すべき情報が共有サーバに置かれていた点などが検証報告で指摘された。出典:<a href="https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000152638.html" target="_blank" rel="noopener">厚生労働省(検証委員会 関連ページ)</a>。',
+  },
+
+  "pension:attack": {
+    start: {
+      clock: "計画フェーズ",
+      h: "本物に見える、一通を作る",
+      body: [
+        "攻める側の視点(操作は抽象化)。狙いは大量の個人情報。正面の壁は固い。弱いのは——人と、置き場所の油断。",
+        "まず何で入口を作るか。"
+      ],
+      choices: [
+        { k: "取引先を装った、開きたくなるメールを広く送る", d: "誰か一人が開けばよい", tag: "だまし", fx: { dmg: +12, trust: 0 }, next: "in" },
+        { k: "一人だけを狙い、やり取りを重ねて信用させる", d: "手間はかかるが刺さる", tag: "だまし", fx: { dmg: +14, trust: 0 }, next: "in" },
+        { k: "正面のシステムを力ずくで破る", d: "壁は厚い", tag: "正攻法", fx: { dmg: -18, trust: 0 }, next: "wall" },
+      ],
+    },
+    in: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "人をだます入口は<b>訓練と報告文化</b>で狭まる。「怪しいと思ったらすぐ共有」が広く根づくほど、一人の油断が全体の被害にならない。" },
+      h: "入れた。あとは、在りか",
+      body: [
+        "一人が開き、中へ足場ができた。狙いの名簿は、本来なら限られた人しか触れない厳重な場所にあるはず。",
+        "だが探すと、作業用の<b>平文コピー</b>が共有フォルダに散らばっている。"
+      ],
+      choices: [
+        { k: "散らばったコピーをまとめて持ち出す", d: "置き場所の油断を突く", tag: "取得", fx: { dmg: +16, trust: 0 }, next: "hunt_copies" },
+        { k: "厳重な本体を無理にこじ開けにいく", d: "暗号と制限が立ちはだかる", tag: "強行", fx: { dmg: -12, trust: 0 }, next: "atk_blocked" },
+      ],
+    },
+    wall: {
+      clock: "計画フェーズ",
+      end: "atk_deterred",
+      fb: { t: "ok", s: "守りの価値", m: "正面が固い組織は正攻法では割に合わない。だから攻撃者は<b>人と運用の隙</b>を探す——そこを締めるのが守りの要。" },
+      h: "正面は、硬い",
+      body: [
+        "システム本体は固く、力押しは時間とリスクに見合わない。攻撃者はいつも、より楽な隙を探す。",
+        "この組織は、人の訓練も置き場所も締まっていた。狙いを外した。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    atk_leak: {
+      clock: "持ち出しフェーズ",
+      end: "atk_success",
+      h: "油断した置き場所から、大量に",
+      body: [
+        "厳重な本体ではなく、作業用に散らばった平文コピーから、大量の個人情報を持ち出せた。守る側の「置き場所の油断」が最大の穴だった。",
+        "——これは守る側が「情報の置き方」を正せば、ほぼ防げた被害でもある。"
+      ],
+      choices: [ { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    atk_blocked: {
+      clock: "持ち出しフェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "本体を<b>暗号化+アクセス最小化</b>していれば、入られても中身は持ち出しにくい。入口を一つ許しても、被害を小さくできる。" },
+      h: "こじ開けられなかった",
+      body: [
+        "本体は暗号化され、触れる権限も絞られていた。入口は作れても、肝心の中身は持ち出せない。",
+        "守る側の「情報の守り方」が、被害を最小に抑えた。"
+      ],
+      choices: [ { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    hunt_copies: {
+      clock: "探索フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "攻撃者は本体より<b>作業用の平文コピー</b>を狙う。守る側は、不要な写しを残さない運用こそ効く。" },
+      h: "散らばった、写しを集める",
+      body: [
+        "厳重な本体は固い。だが共有フォルダには、作業用の<b>平文コピー</b>が無造作に残っている。ひとつずつ在りかを辿る。",
+        "——不要な写しが消され、残りが暗号化されていれば、ここで手詰まりだった。"
+      ],
+      choices: [
+        { k: "平文コピーの在りかを洗い出す", d: "置き場所の油断を辿る", tag: "探索", fx: { dmg: +12, trust: 0 }, next: "exfil" },
+        { k: "本体を無理にこじ開けにいく", d: "暗号と制限に阻まれる", tag: "強行", fx: { dmg: -12, trust: 0 }, next: "atk_blocked" },
+      ],
+    },
+    exfil: {
+      clock: "持ち出しフェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "大量持ち出しは<b>外向き通信の監視</b>で捉えられる。守る側は、出ていくデータを見ていれば途中で止められる。" },
+      h: "気づかれる前に、運び出す",
+      body: [
+        "集めた写しを、少しずつ外へ送り出す。急げば検知され、遅ければ気づかれる前に封じ込められる。",
+        "——出口の通信を見張っていれば、この搬出は止められた。"
+      ],
+      choices: [
+        { k: "監視の薄い時間帯に、まとめて持ち出す", d: "一気に抜く", tag: "取得", fx: { dmg: +12, trust: 0 }, next: "atk_leak" },
+        { k: "欲張って大量に送り、通信で足がつく", d: "派手すぎる", tag: "露見", fx: { dmg: -10, trust: 0 }, next: "atk_blocked" },
+      ],
+    },
+    _learn: [
+      "狙われるのは「人の油断」と「情報の置き場所の油断」。システム正面だけ固めても足りない。",
+      "大量の個人情報は<b>暗号化+触れる人を最小化</b>。作業用の平文コピーこそ最大の穴。",
+      "人をだます入口は、<b>訓練と「すぐ報告」の文化</b>で狭められる。",
+      "入口を一つ許しても、情報本体が守られていれば被害は小さくできる。",
+    ],
+    _src: '攻める側の視点は、守る側の優先順位を裏から照らすためのものです。手順は書かず判断のみ抽象化。下敷き:公的機関の個人情報流出(2015)。出典:<a href="https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000152638.html" target="_blank" rel="noopener">厚生労働省</a>。',
+  },
+
+  "port:defend": {
+    start: {
+      clock: "AM 6:30 · 荷役開始前",
+      h: "コンテナの頭脳が、動かない",
+      body: [
+        "あなたは港の基幹システムを預かる技術責任者。コンテナの搬出入を一手に管理する中核システムが、起動しない。画面には身代金要求。",
+        "この港が止まると、西日本の物流が滞る。トラックの行列がもう伸び始めている。"
+      ],
+      choices: [
+        { k: "搬出入をいったん全面停止し、被害範囲を切り分ける", d: "混乱するが拡大を止める", tag: "封じ込め", fx: { dmg: -6, trust: +4 }, next: "triage" },
+        { k: "動く所だけでも動かし続け、調査は後で", d: "止めたくない", tag: "継続優先", fx: { dmg: +16, trust: -4 }, next: "keep" },
+      ],
+    },
+    triage: {
+      clock: "AM 8:00",
+      fb: { t: "ok", s: "妥当な初動", m: "中核が侵されたら、<b>広げないために一度止める</b>勇気が要る。動かしたまま調べると、感染済みの土台で二次被害が出る。" },
+      h: "手で、紙で、回せるか",
+      body: [
+        "停止して切り分けを始めた。復旧には時間がかかる。問題は、その間にコンテナを<b>手作業・紙の伝票</b>で回せるか。",
+        "平時にその訓練をしていたかで、今日の混乱の大きさが決まる。"
+      ],
+      choices: [
+        { k: "手作業の代替手順に切替え、最優先の貨物から順に", d: "遅いが物流は死なない", tag: "事業継続", fx: { dmg: -10, trust: +10 }, next: "coordinate" },
+        { k: "復旧を待ち、動かさず止めておく", d: "安全だが物流が完全停止", tag: "待機", fx: { dmg: +8, trust: -6 }, next: "wait" },
+      ],
+    },
+    keep: {
+      clock: "AM 9:30",
+      fb: { t: "bad", s: "広げてしまう恐れ", m: "中核が侵された状態で動かし続けると、つながった系へ被害が波及しうる。止める判断の遅れが、復旧をさらに遠ざける。" },
+      h: "被害が、つながった系へ",
+      body: [
+        "止めずに粘った結果、関連するシステムにも異常が出始めた。切り分けが難しくなり、復旧の見通しが遠のく。",
+        "今からでも全面停止して立て直すしかない。"
+      ],
+      choices: [
+        { k: "全面停止し、手作業の代替手順へ切替える", d: "遅れたが現実的な運用へ", tag: "事業継続", fx: { dmg: -6, trust: +6 }, next: "coordinate" },
+        { k: "まだ粘る", d: "止めたくない", tag: "継続優先", fx: { dmg: +12, trust: -10 }, next: "wait" },
+      ],
+    },
+    coordinate: {
+      clock: "AM 10:30",
+      fb: { t: "ok", s: "一人では回らない", m: "巨大インフラの復旧は自組織だけでは難しい。<b>復旧チーム・関係機関・取引先</b>との連携が、手作業運用の生死を分ける。" },
+      h: "手は足りるのか",
+      body: [
+        "手作業へ切替えた。だが港は広大で、人手も情報も足りない。鉄道・トラック事業者・税関とも足並みをそろえる必要がある。",
+        "どう進める。"
+      ],
+      choices: [
+        { k: "復旧チームと関係機関・取引先に応援と連携を要請する", d: "外の力を借りて回す", tag: "連携", fx: { dmg: -8, trust: +8 }, next: "restore_order" },
+        { k: "情報を出さず、自前で抱えて進める", d: "混乱を外に見せたくない", tag: "抱え込み", fx: { dmg: +10, trust: -6 }, next: "strain" },
+      ],
+    },
+    strain: {
+      clock: "数日間",
+      end: "mix",
+      h: "抱え込んで、軋んだ",
+      body: [
+        "応援を呼ばず自前で抱えた結果、手作業は追いつかず、優先順位の判断も現場任せに。港は動いたが、遅れと混乱が広がった。",
+        "止めはしなかったが、連携していればもっと軽くすんだ。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    manual: {
+      clock: "翌日〜数日",
+      end: "win",
+      h: "遅くても、港は死ななかった",
+      body: [
+        "手作業の代替手順で、最優先の貨物から搬出入を再開。平時の訓練と、復旧チーム・関係機関の連携が効いた。数日で通常運用へ戻せた。",
+        "完全には止めない——物流の港にとって、それが信頼そのものだった。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    wait: {
+      clock: "数日間",
+      end: "loss",
+      h: "止まり続けた港",
+      body: [
+        "動かす代替手段がなく、復旧までコンテナは滞留。トラックの行列は膨らみ、荷主の予定が次々狂った。",
+        "システムは戻ったが、「止まったときに回す術がなかった」ことが重い課題として残った。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    restore_order: {
+      clock: "午後",
+      fb: { t: "ok", s: "戻す順番と、再汚染の防止", m: "動かすほど、感染した土台へ<b>戻してしまう危険</b>がある。経路を確かめ、優先貨物から段階的に戻す。" },
+      h: "どの船から、動かすか",
+      body: [
+        "連携は整った。だが中核をいきなり全面復旧すれば、残った汚染で再発しかねない。安全を確かめた系から、優先度順に戻す。",
+        "冷蔵・医薬・救援物資など、待てない貨物をどう扱うか。"
+      ],
+      choices: [
+        { k: "安全確認済みの系から、緊急度の高い貨物を段階復旧", d: "順序だてて戻す", tag: "段階復旧", fx: { dmg: -8, trust: +8 }, next: "manual" },
+        { k: "早く通常に戻したいので一括で復旧させる", d: "一気に戻す", tag: "拙速", fx: { dmg: +10, trust: -6 }, next: "strain" },
+      ],
+    },
+    _learn: [
+      "社会インフラでは「止めない」より、<b>広げないために一度止めて切り分ける</b>判断が要ることがある。",
+      "システムが戻るまでを<b>手作業・紙で回す代替手順</b>を平時に用意し、訓練しておく。",
+      "中核システムは外部とのつなぎ目(保守経路など)が入口になりうる。そこの守りと監視を固める。",
+      "復旧は自組織だけでは難しい。関係機関・専門チームとの連携を事前に決めておく。",
+    ],
+    _src: '<b>東湾港</b>は架空。下敷き:名古屋港のコンテナ管理システムがランサムウェアで停止し、搬出入が約3日間止まった事案(2023年7月)。出典:<a href="https://internet.watch.impress.co.jp/docs/news/1521097.html" target="_blank" rel="noopener">INTERNET Watch(事案の報道)</a>。',
+  },
+
+  "port:attack": {
+    start: {
+      clock: "偵察フェーズ",
+      h: "社会が止まる所を、探す",
+      body: [
+        "攻める側の視点(操作は抽象化)。狙うのは「止まると困る所ほど、早く払う」という発想の相手。物流インフラはその典型だ。",
+        "どこから中核システムに近づくか。"
+      ],
+      choices: [
+        { k: "外部とつながる保守・遠隔の経路の弱点を探す", d: "つなぎ目の油断を狙う", tag: "入口", fx: { dmg: +12, trust: 0 }, next: "reach" },
+        { k: "関係する業者経由で回り込む", d: "取引先の弱さを踏み台にする", tag: "迂回", fx: { dmg: +10, trust: 0 }, next: "reach" },
+        { k: "監視も備えも堅い港を狙う", d: "割に合うか", tag: "判断", fx: { dmg: -20, trust: 0 }, next: "hard" },
+      ],
+    },
+    reach: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "中核は<b>外とのつなぎ目</b>(保守経路・取引先)から狙われる。守る側は、本体だけでなくその接続点の監視と更新を優先すべきと分かる。" },
+      h: "中核に、手が届いた",
+      body: [
+        "外とのつなぎ目から中核へ近づけた。止めれば社会的影響が大きい——相手が早く払う、という読み。",
+        "見張り(監視)が機能していれば、この接近は気づかれるはずだが。"
+      ],
+      choices: [
+        { k: "中核を一気に止める", d: "最大の圧力をかける", tag: "実行", fx: { dmg: +16, trust: 0 }, next: "persist" },
+        { k: "気づかれないよう少しずつ動く", d: "だが監視に引っかかる", tag: "潜伏", fx: { dmg: -10, trust: 0 }, next: "atk_caught" },
+      ],
+    },
+    hard: {
+      clock: "偵察フェーズ",
+      end: "atk_deterred",
+      fb: { t: "ok", s: "守りの価値", m: "つなぎ目を締め、監視し、止まっても回せる港は「止めても早く復旧され、払う必要がない」と見なされる。抑止になる。" },
+      h: "この港は、割に合わない",
+      body: [
+        "接続点は更新・監視され、止まっても手作業で回す備えがある。止めても早く立て直され、圧力にならない。",
+        "攻撃者は、効き目の薄い相手を避けた。"
+      ],
+      choices: [ { k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    atk_stop: {
+      clock: "実行フェーズ",
+      end: "atk_success",
+      h: "社会が、止まった",
+      body: [
+        "中核を止め、港の物流がまひした。影響が大きいほど圧力は強い——という攻撃者の読みが当たった形。",
+        "だがこれは、守る側が「つなぎ目の守り」と「止まっても回す備え」を持てば、ここまで効かなかった被害でもある。"
+      ],
+      choices: [ { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    atk_caught: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "<b>監視(ログを見る人)</b>が機能していれば、中核に近づく不審な動きは実行前に捕まえられる。早期発見が最大の防御。" },
+      h: "実行の前に、捕まった",
+      body: [
+        "潜もうとした動きを監視が捉え、つなぎ目を遮断された。中核に手が届く前に止められた。",
+        "守る側の「見張り」が、社会の停止を未然に防いだ。"
+      ],
+      choices: [ { k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" } ],
+    },
+    persist: {
+      clock: "潜伏フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "中核に届いても、<b>監視</b>が居座りを捉えれば実行前に断てる。守る側は接続点の挙動を見張る。" },
+      h: "止める時を、待つ",
+      body: [
+        "中核に手は届いた。だが今すぐ止めるより、最も打撃の大きい時間帯まで静かに居座るほうが効く。",
+        "——接続点の監視が生きていれば、この潜伏は見つかる。"
+      ],
+      choices: [
+        { k: "監視を避け、物流が集中する時刻まで待つ", d: "打撃を最大化", tag: "潜伏", fx: { dmg: +12, trust: 0 }, next: "trigger" },
+        { k: "焦って動き回り、監視に触れる", d: "雑になる", tag: "露見", fx: { dmg: -10, trust: 0 }, next: "atk_caught" },
+      ],
+    },
+    trigger: {
+      clock: "実行フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "止まっても<b>手作業で回せる</b>港は、停止の打撃が小さい。備えが攻撃の効き目を削ぐ。" },
+      h: "最も、効く一瞬に",
+      body: [
+        "搬出入が集中する時刻、中核を止める。混乱は最大になる——はずだった。",
+        "——止まっても紙と手作業で回す備えがあれば、打撃はここまで広がらない。"
+      ],
+      choices: [
+        { k: "ピーク時に中核を停止させる", d: "社会に打撃", tag: "実行", fx: { dmg: +12, trust: 0 }, next: "atk_stop" },
+        { k: "タイミングを外し、代替運用で吸収される", d: "空振り", tag: "不発", fx: { dmg: -10, trust: 0 }, next: "atk_caught" },
+      ],
+    },
+    _learn: [
+      "インフラは「止まると困るほど狙われる」。だからこそ平時の備えが抑止になる。",
+      "中核は<b>外とのつなぎ目</b>(保守経路・取引先)から狙われる。接続点の更新・監視を優先。",
+      "監視(ログを見る人)が実行前の接近を捉えれば、最悪を防げる。",
+      "止まっても<b>手作業で回す備え</b>があれば、攻撃者の圧力は効きにくくなる。",
+    ],
+    _src: '攻める側の視点は、守る側の優先順位を裏から照らすためのものです。手順は書かず判断のみ抽象化。下敷き:大規模港湾のシステム停止(2023)。出典:<a href="https://internet.watch.impress.co.jp/docs/news/1521097.html" target="_blank" rel="noopener">INTERNET Watch</a>。',
+  },
+
+  "deepfake:defend": {
+    start: {
+      clock: "15:40 · 四半期末",
+      h: "役員から、極秘の送金指示",
+      body: [
+        "ビデオ会議に突然呼ばれた。画面には財務担当役員。顔も声も、本人そのもの。「極秘の買収が進んでいる。今日中にこの口座へ送金してほしい。メールやLINEには残すな」と念を押される。",
+        "あなたは経理担当。四半期末で手一杯。相手は時間がないと急かしてくる。"
+      ],
+      choices: [
+        { k: "正規手順で確認(複数人承認+役員の公式番号へ折り返す)", d: "急がず、別経路で本人確認", tag: "本人確認", fx: { dmg: -5, trust: +6 }, next: "callback" },
+        { k: "画面の違和感をAI検知と同僚に相談する", d: "口と音のズレが気になる", tag: "検証", fx: { dmg: 0, trust: +3 }, next: "detect" },
+        { k: "役員の指示だ、急ぎなので送金手続きに進む", d: "指示に従う", tag: "即応", fx: { dmg: +20, trust: -12 }, next: "money_gone" },
+      ],
+    },
+    verify: {
+      clock: "15:58",
+      end: "win",
+      fb: { t: "ok", s: "基本の勝ち手", m: "顔と声は偽れても、<b>別経路の本人確認</b>は偽れない。会議内やメール・LINEで確かめず、登録済みの公式番号へ折り返す(コールバック)のが鉄則。" },
+      h: "折り返したら、本人は何も知らなかった",
+      body: [
+        "会議を一度離れ、役員の公式番号に電話。本人は「そんな会議も送金指示もしていない」。ディープフェイクだった。",
+        "送金を止め、関係者へ注意喚起。被害はゼロ。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    detect: {
+      clock: "16:05",
+      fb: { t: "ok", s: "違和感は正しい", m: "合成は<b>まばたき・口と音の同期・SNS由来の素材</b>に出やすい。気づいたら正規手順へ回す。" },
+      h: "画面の役員が、少しだけズレている",
+      body: [
+        "AI検知ツールに会議映像をかけると、口の動きと音声の同期に乱れ。SNSで公開された役員の講演動画が、合成の素材に使われた形跡もある。",
+        "どう動く。"
+      ],
+      choices: [
+        { k: "公式番号へ折り返して確定し、送金を止める", d: "別経路で裏を取る", tag: "本人確認", fx: { dmg: -5, trust: +7 }, next: "caught_win" },
+        { k: "念のため一部だけ先に送っておく", d: "半分だけ応じる", tag: "折衷", fx: { dmg: +8, trust: -4 }, next: "half_sent" },
+      ],
+    },
+    caught_win: {
+      clock: "16:20",
+      end: "win",
+      h: "合成と確定。未然に防いだ",
+      body: [
+        "コールバックで偽と確定。送金は実行前に停止。使われた公開動画の削除申請と、役員のなりすまし注意喚起も出した。",
+        "最新の手口を、手順と違和感で止めきった。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    half_sent: {
+      clock: "翌日",
+      end: "mix",
+      h: "一部を送った後で、気づいた",
+      body: [
+        "急かされ、一部を先に送金。直後にコールバックで偽と判明し、残りは停止。送った分の一部は追跡で凍結できたが、全額は戻らない。",
+        "被害は出たが、全損は免れた。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    money_gone: {
+      clock: "翌日",
+      end: "loss",
+      h: "送金後に、消えた",
+      body: [
+        "指示通り送金。直後に本人へ連絡がつき、偽と発覚。資金は複数の口座を経由して海外へ移され(資金洗浄)、犯人は逃走した。",
+        "回収は難航。四半期末の損失として重くのしかかる。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    callback: {
+      clock: "15:52",
+      fb: { t: "ok", s: "急かしに、乗らない", m: "詐欺は<b>時間を奪う</b>。会議の中やチャットで確かめても無意味。一度離れ、登録済みの番号へ自分から折り返す。" },
+      h: "「今すぐ」と、畳みかけてくる",
+      body: [
+        "画面の役員は「秒を争う」「席を外すな」と急かす。だが本人確認は、この会議の外でしかできない。",
+        "どう動く。"
+      ],
+      choices: [
+        { k: "会議を一度離れ、公式番号へ自分から折り返す", d: "別経路で裏を取る", tag: "本人確認", fx: { dmg: -5, trust: +6 }, next: "contain_fraud" },
+        { k: "押し切られ、一部だけ先に送ってしまう", d: "急かしに負ける", tag: "折衷", fx: { dmg: +8, trust: -6 }, next: "half_sent" },
+      ],
+    },
+    contain_fraud: {
+      clock: "16:10",
+      fb: { t: "ok", s: "一人で止めず、広げて守る", m: "偽と分かったら、<b>他の標的・公開素材・通報</b>まで手当てする。同じ手口は社内の別の誰かにも向く。" },
+      h: "偽だ。では、どう畳むか",
+      body: [
+        "折り返しで、本人は会議も指示も知らないと判明。偽だ。送金を止めたうえで、被害を一人で抱えず広げて守る。"
+      ],
+      choices: [
+        { k: "全社へ注意喚起し、使われた公開動画の削除と通報を進める", d: "横展開を防ぐ", tag: "封じ込め", fx: { dmg: -4, trust: +6 }, next: "verify" },
+        { k: "自分の所で止まったので、特に共有しない", d: "内々で終える", tag: "抱え込み", fx: { dmg: +4, trust: -4 }, next: "half_sent" },
+      ],
+    },
+    _learn: [
+      "顔と声は公開情報から合成できる。<b>画面の本人を信じず</b>、別経路で本人確認する。",
+      "送金・重要指示は<b>登録済みの公式番号へコールバック</b>+複数人承認を必須に。",
+      "「メールやLINEに残すな」「至急」「極秘」は危険信号。急かしは詐欺の常とう。",
+      "合成はまばたき・口と音のズレ・SNS由来の素材で見抜ける。AI検知も併用する。",
+    ],
+    _src: '<b>みらい商事</b>は架空。下敷き:2024年に広く報道された、偽のビデオ会議(ディープフェイク)で財務担当者が巨額送金をさせられた事件。SNSや動画の公開素材から顔と声が合成される点が新しい。背景:<a href="https://blog.knowbe4.com/cyberheistnews-vol-15-48-new-deepfake-danger-1-in-5-biometric-attacks-are-now-ai-driven" target="_blank" rel="noopener">KnowBe4(生体認証×AI攻撃の増加)</a>。個別事件の詳細URLは未添付(広く報道)。',
+  },
+
+  "deepfake:attack": {
+    start: {
+      clock: "計画フェーズ",
+      h: "本人を、作り出す",
+      body: [
+        "攻める側の視点(操作は抽象化)。狙いは経理担当。正面の壁より、人の信頼を突く。",
+        "素材はいくらでもある。SNSや動画サイトに、役員の顔と声は公開されている。在席のタイミングも、公開投稿から読める。"
+      ],
+      choices: [
+        { k: "公開動画・音声から精巧に合成し、偽の会議を仕立てる", d: "時間をかけ、見分けのつかない本人を作る", tag: "生成", fx: { dmg: +14 }, next: "build" },
+        { k: "粗い合成で急いで仕掛ける", d: "速いが雑", tag: "即席", fx: { dmg: +3 }, next: "rough" },
+        { k: "複数承認とコールバックが固い会社は断念する", d: "狙いを変える", tag: "判断", fx: { dmg: -18 }, next: "give" },
+      ],
+    },
+    build: {
+      clock: "生成フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "顔と声は<b>公開情報から合成</b>できる。守る側は『画面の本人』を信じず、別経路の確認(コールバック)で守るしかない。" },
+      h: "本人そっくりが、できた",
+      body: [
+        "公開素材から、本人と見分けのつかない映像と声を合成。偽のビデオ会議で送金を指示する。",
+        "あとは、相手に確認の隙を与えるかどうか。"
+      ],
+      choices: [
+        { k: "期限を切って急かし、メールやLINEに残すなと口止めする", d: "折り返す時間を与えない", tag: "圧", fx: { dmg: +16 }, next: "rehearse" },
+        { k: "相手に確認の時間を与えてしまう", d: "詰めが甘い", tag: "隙", fx: { dmg: -12 }, next: "foiled" },
+      ],
+    },
+    done: {
+      clock: "実行フェーズ",
+      end: "atk_success",
+      h: "送金された。あとは、消えるだけ",
+      body: [
+        "急かしに押され、送金が実行された。資金は複数口座を経て海外へ(資金洗浄)、足取りを消して逃走する。",
+        "——これは守る側が『画面を信じずコールバック』していれば、防げた被害でもある。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    foiled: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "急かしても、相手が<b>登録済みの番号へ折り返せば</b>偽は即バレる。時間と別経路が守りになる。" },
+      h: "折り返され、終わった",
+      body: [
+        "相手は会議を一度離れ、役員の公式番号へコールバック。本人が否定し、偽と即露見。送金は実行されなかった。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    rough: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の学び", m: "粗い合成は<b>まばたき・口と音のズレ</b>で見抜かれる。違和感を疑える人とAI検知が効く。" },
+      h: "違和感で、見抜かれた",
+      body: [
+        "急ぎすぎた合成は、口と音が微妙にズレていた。経理担当が怪しみ、正規手順で確認。偽と判明した。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    give: {
+      clock: "計画フェーズ",
+      end: "atk_deterred",
+      fb: { t: "ok", s: "守りの価値", m: "複数承認とコールバックが根づいた会社は、なりすましても通らない。<b>手順が抑止</b>になる。" },
+      h: "この会社は、通らない",
+      body: [
+        "送金には必ず複数承認と、公式番号へのコールバック。画面の本人を信じない文化がある。なりすましても意味がない。",
+        "攻撃者は、楽な相手を探しに去った。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    rehearse: {
+      clock: "仕込みフェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "筋書きは<b>急かしと口止め</b>で確認の隙を消す。守る側は『急かされたら折り返す』を手順にすれば崩れる。" },
+      h: "筋書きを、固める",
+      body: [
+        "本人そっくりの映像はできた。あとは、相手に考える時間を与えない筋書き——極秘・至急・記録を残すな。",
+        "——『急かされたら必ず折り返す』が根づいていれば、筋書きは通らない。"
+      ],
+      choices: [
+        { k: "極秘と期限で、確認の隙を塗りつぶす", d: "折り返す暇を消す", tag: "仕込み", fx: { dmg: +12 }, next: "pressure" },
+        { k: "設定が雑で、話に綻びが出る", d: "詰めが甘い", tag: "露見", fx: { dmg: -12 }, next: "foiled" },
+      ],
+    },
+    pressure: {
+      clock: "実行フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "最後は<b>心理的圧力</b>。だが別経路の本人確認(コールバック)は、どんな圧力でも偽を暴く。" },
+      h: "あと一押し",
+      body: [
+        "偽の会議で、役員になりすまし送金を指示。「今日中だ」「君を信じている」——情に訴え、畳みかける。",
+        "——相手が一度席を外して折り返せば、すべて崩れる。"
+      ],
+      choices: [
+        { k: "情と期限で押し切り、送金させる", d: "確認させない", tag: "圧", fx: { dmg: +12 }, next: "done" },
+        { k: "相手が席を外し、折り返してしまう", d: "隙を与えた", tag: "失敗", fx: { dmg: -12 }, next: "foiled" },
+      ],
+    },
+    _learn: [
+      "狙われるのは「画面の本人を信じてしまう」心理と、急かし。手口ではなく判断を鍛える。",
+      "顔・声は<b>SNSや公開動画から合成</b>できる。本人確認は必ず別経路(コールバック)で。",
+      "送金・重要指示は複数承認を必須に。一人で完結させない。",
+      "「至急・極秘・記録に残すな」は危険信号。立ち止まって折り返す。",
+    ],
+    _src: '攻める側の視点は、守る側の優先順位を裏から照らすためのものです。手順は書かず判断のみ抽象化。下敷き:2024年の偽ビデオ会議による送金詐欺。背景:<a href="https://blog.knowbe4.com/cyberheistnews-vol-15-48-new-deepfake-danger-1-in-5-biometric-attacks-are-now-ai-driven" target="_blank" rel="noopener">KnowBe4</a>。',
+  },
+
+  "grid:defend": {
+    start: {
+      clock: "AM 2:10 · 厳冬期",
+      h: "制御盤が、勝手に動いた",
+      body: [
+        "あなたは電力制御センターの当直技術者。数百万世帯へ送電する遮断器が、誰も触れていないのに遠隔で開こうとする。操作ログに、見覚えのない指示が混じる。",
+        "真冬の深夜。止まれば、暖房も鉄道も信号も病院も止まる。"
+      ],
+      choices: [
+        { k: "遠隔操作を遮断し、手動運転へ切替える", d: "制御を人の手に取り戻す", tag: "奪還", fx: { dmg: -6, trust: +5 }, next: "manual_prep" },
+        { k: "まず正体を調べてから動く", d: "原因究明を優先", tag: "調査", fx: { dmg: +12, trust: -2 }, next: "investigate" },
+        { k: "誤作動だろうと様子を見る", d: "静観する", tag: "静観", fx: { dmg: +18, trust: -10 }, next: "ignore" },
+      ],
+    },
+    manual_prep: {
+      clock: "AM 2:35",
+      fb: { t: "ok", s: "正しい初動", m: "遠隔を断ち、<b>人の手に取り戻す</b>のが最優先。制御を奪われたまま調べると、その間に遮断器を開かれる。" },
+      h: "現場に、人を送る",
+      body: [
+        "遠隔指令を遮断し、各変電所へ技術者を向かわせ、手動で送電を保つ。攻撃者は制御を失っていく。",
+        "あとは、全域を人の手でさばけるか。"
+      ],
+      choices: [
+        { k: "優先順位(病院・鉄道・暖房)を決め、手動で維持", d: "守るものから順に", tag: "事業継続", fx: { dmg: -8, trust: +10 }, next: "seal_route" },
+        { k: "全部を一度に戻そうと焦る", d: "一気に復旧", tag: "焦り", fx: { dmg: +6, trust: -3 }, next: "overload" },
+      ],
+    },
+    investigate: {
+      clock: "AM 3:20",
+      fb: { t: "bad", s: "遅れた", m: "制御を奪われた状態で調べる数十分に、遮断器を開かれる。<b>調査より先に手動奪還</b>を。" },
+      h: "調べている間に、開いた",
+      body: [
+        "正体を探る間に、いくつかの遮断器が開き、一部地域が停電。鉄道が止まり、駅に人があふれる。",
+        "今からでも、手動へ切替えるしかない。"
+      ],
+      choices: [
+        { k: "手動運転へ切替え、優先地域から復旧", d: "拡大を止める", tag: "事業継続", fx: { dmg: -6, trust: +6 }, next: "partial_restore" },
+        { k: "さらに原因究明を優先する", d: "なお調査", tag: "固執", fx: { dmg: +10, trust: -8 }, next: "blackout" },
+      ],
+    },
+    ignore: {
+      clock: "AM 3:40",
+      fb: { t: "bad", s: "最悪手", m: "「誤作動だろう」で失う時間が、停電を広域にする。異常は即、<b>制御の奪還</b>へ。" },
+      h: "広がる、闇",
+      body: [
+        "様子を見る間に遮断器が次々開き、停電は広域へ。信号も鉄道も止まり、厳冬の夜に暖房が落ちる。",
+        "大きな被害になった。"
+      ],
+      choices: [
+        { k: "今すぐ手動切替で食い止める", d: "遅れても止める", tag: "事業継続", fx: { dmg: -4, trust: +4 }, next: "partial_restore" },
+        { k: "なお対応が後手に回る", d: "後手", tag: "後手", fx: { dmg: +8, trust: -8 }, next: "blackout" },
+      ],
+    },
+    hold: {
+      clock: "夜明け",
+      end: "win",
+      h: "人の手が、灯りを守った",
+      body: [
+        "優先順位を決め、手動運転で送電を維持。停電は局所にとどめ、病院と鉄道の最低限を守った。復旧後、遠隔経路の弱点も塞いだ。",
+        "最新の攻撃を、備えと人の手で止めきった。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    overload: {
+      clock: "夜明け",
+      end: "mix",
+      h: "欲張って、一部を落とした",
+      body: [
+        "一度に戻そうとして負荷が偏り、一部で停電。すぐ持ち直したが、全域無傷とはいかなかった。",
+        "止めはしたが、詰めに課題が残った。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    partial_restore: {
+      clock: "夜明け",
+      end: "mix",
+      h: "食い止めたが、傷は残った",
+      body: [
+        "手動切替で拡大は止めたが、一部地域は数時間の停電。鉄道の遅れと寒さの中、復旧を急いだ。",
+        "被害は出たが、広域崩壊は免れた。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    blackout: {
+      clock: "翌日",
+      end: "loss",
+      h: "広域停電、真冬の夜に",
+      body: [
+        "対応が後手に回り、広域停電。鉄道停止、信号滅灯、暖房喪失。社会の混乱は大きく、復旧と信頼回復に時間がかかった。",
+        "人の手に取り戻すのが、遅すぎた。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    seal_route: {
+      clock: "AM 3:00",
+      fb: { t: "ok", s: "入口を、閉める", m: "手動に戻しても、<b>遠隔の入口</b>が開いたままなら再び奪われる。保守経路を断ち、多要素で固め直す。" },
+      h: "開いた扉を、閉じる",
+      body: [
+        "制御は人の手に戻した。だが攻撃者が使った<b>遠隔の通り道</b>が開いていれば、また同じことが起きる。経路を断ち、認証を固め直す。"
+      ],
+      choices: [
+        { k: "侵入経路を遮断し、多要素認証で固め直す", d: "再侵入を防ぐ", tag: "経路遮断", fx: { dmg: -6, trust: +6 }, next: "coordinate_grid" },
+        { k: "今は送電維持で手一杯、経路は後回し", d: "後回し", tag: "後回し", fx: { dmg: +10, trust: -6 }, next: "blackout" },
+      ],
+    },
+    coordinate_grid: {
+      clock: "AM 4:10",
+      fb: { t: "ok", s: "一人の制御室では、守れない", m: "停電は社会に連鎖する。<b>鉄道・自治体・近隣事業者</b>と連携し、優先順位をそろえて初めて最小化できる。" },
+      h: "社会と、歩調を合わせる",
+      body: [
+        "入口は閉じた。残るは、限られた電力をどう配るか。鉄道・病院・自治体と連絡を取り、守る順番をそろえる。"
+      ],
+      choices: [
+        { k: "関係機関と優先順位を共有し、手動で最低限を維持", d: "社会と連携", tag: "連携", fx: { dmg: -6, trust: +8 }, next: "hold" },
+        { k: "自分たちの判断だけで送電先を決める", d: "独断で配る", tag: "独断", fx: { dmg: +8, trust: -6 }, next: "overload" },
+      ],
+    },
+    _learn: [
+      "重要インフラは<b>遠隔を断ち手動に戻す</b>のが最優先。制御を奪われたまま調べない。",
+      "停電は電気だけでなく<b>鉄道・信号・暖房・医療</b>へ連鎖する。優先順位を平時に決める。",
+      "制御系の<b>外とのつなぎ目(保守・遠隔経路)</b>が入口。更新・監視・多要素で固める。",
+      "手動運転の訓練を平時に。人の手で最低限を回せることが最後の砦。",
+    ],
+    _src: '<b>首都圏 電力制御センター</b>は架空。下敷き:2015年のウクライナ電力網へのサイバー攻撃(遠隔操作で変電所の遮断器が開かれ、約23万人が停電)。手動運転で復旧した点が教訓。広く報道・報告された事例(個別URLは未添付)。',
+  },
+
+  "grid:attack": {
+    start: {
+      clock: "偵察フェーズ",
+      h: "社会の、電源を狙う",
+      body: [
+        "攻める側の視点(操作は抽象化)。狙いは重要インフラ。電気を落とせば、鉄道も通信も暖房も連鎖で止まる。影響は絶大だ。",
+        "制御系へ、どう近づくか。"
+      ],
+      choices: [
+        { k: "保守・遠隔経路の弱点から制御網へ近づく", d: "つなぎ目の油断を突く", tag: "入口", fx: { dmg: +12 }, next: "reach" },
+        { k: "運用員をだまして認証を得る", d: "人の油断を突く", tag: "だまし", fx: { dmg: +10 }, next: "social" },
+        { k: "監視も手動運転も固い事業者は断念する", d: "狙いを変える", tag: "判断", fx: { dmg: -18 }, next: "give" },
+      ],
+    },
+    reach: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "制御系は<b>保守・遠隔のつなぎ目</b>から狙われる。守る側はそこの更新・監視・多要素を最優先に。" },
+      h: "遮断器に、手が届いた",
+      body: [
+        "外とのつなぎ目から制御網へ。遮断器を遠隔で開けば、停電を起こせる。",
+        "見張り(監視)と、手動運転の備えがあるかどうか。"
+      ],
+      choices: [
+        { k: "一斉に遮断器を開く", d: "最大の衝撃", tag: "実行", fx: { dmg: +16 }, next: "map_grid" },
+        { k: "気づかれぬよう少しずつ動く", d: "だが監視に触れる", tag: "潜伏", fx: { dmg: -10 }, next: "caught" },
+      ],
+    },
+    social: {
+      clock: "侵入フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "運用員をだます入口は<b>訓練と多要素認証</b>で狭まる。人の一押しで制御を渡さない。" },
+      h: "運用員が、鍵を渡した",
+      body: [
+        "巧妙な連絡で運用員から認証を得て、制御網へ。だが多要素や手順が固ければ、ここで止まる。"
+      ],
+      choices: [
+        { k: "制御を奪い、遮断器を操作する", d: "一気に落とす", tag: "実行", fx: { dmg: +14 }, next: "done" },
+        { k: "多要素に阻まれる", d: "壁に当たる", tag: "阻止", fx: { dmg: -12 }, next: "blocked" },
+      ],
+    },
+    give: {
+      clock: "偵察フェーズ",
+      end: "atk_deterred",
+      fb: { t: "ok", s: "守りの価値", m: "遠隔を断って手動で回せ、監視と多要素が揃う事業者は、落としても早く戻される。<b>抑止</b>になる。" },
+      h: "ここは、落とせない",
+      body: [
+        "つなぎ目は更新・監視され、運用員は訓練済み、手動運転の備えもある。落としても早く戻され、圧力にならない。",
+        "攻撃者は、効き目の薄い相手を避けた。"
+      ],
+      choices: [{ k: "結果を振り返る", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    done: {
+      clock: "実行フェーズ",
+      end: "atk_success",
+      h: "都市が、暗転した",
+      body: [
+        "遮断器を開き、広域停電。鉄道も信号も暖房も連鎖で止まり、社会は大混乱に陥る。影響が大きいほど圧力は強い。",
+        "——守る側が『遠隔を断ち手動で回す』備えを持てば、ここまで効かなかった被害でもある。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    caught: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "監視が制御網への接近を捉えれば、<b>遮断の前に</b>止められる。早期発見が最大の防御。" },
+      h: "開く前に、止められた",
+      body: [
+        "少しずつ動いた痕跡を監視が捉え、遠隔経路を遮断された。遮断器を開く前に阻止された。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    blocked: {
+      clock: "実行フェーズ",
+      end: "atk_partial",
+      fb: { t: "ok", s: "守る側の勝ち筋", m: "認証を得ても、<b>多要素と手順</b>の壁で制御には届かない。人を一人破られても止められる。" },
+      h: "多要素に、阻まれた",
+      body: [
+        "認証は得たが、多要素と操作手順の壁で制御には届かない。停電は起こせなかった。"
+      ],
+      choices: [{ k: "守る側の対策を確認して終わる", d: "終了", tag: "終了", fx: {}, next: "END" }],
+    },
+    map_grid: {
+      clock: "選定フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "どの遮断器を開くかの<b>下調べ</b>は、制御網の監視で露見する。守る側は制御系の異常な読み取りを監視する。" },
+      h: "どこを、落とすか",
+      body: [
+        "制御網に届いた。だが闇雲に開くより、連鎖が最も広がる<b>急所の遮断器</b>を見極めるほうが効く。構成を静かに読む。",
+        "——制御系の監視が生きていれば、この下調べで気づかれる。"
+      ],
+      choices: [
+        { k: "連鎖の起点になる遮断器を見極める", d: "急所を狙う", tag: "選定", fx: { dmg: +12 }, next: "time_attack" },
+        { k: "急いで探り、制御網の監視に触れる", d: "雑になる", tag: "露見", fx: { dmg: -10 }, next: "caught" },
+      ],
+    },
+    time_attack: {
+      clock: "実行フェーズ",
+      fb: { t: "bad", s: "守る側の学び", m: "最大の打撃は<b>需要ピークの厳冬深夜</b>。だが手動運転に戻せる事業者なら、停電は長く続かない。" },
+      h: "最も寒い、時刻に",
+      body: [
+        "暖房需要が頂点に達する深夜、急所の遮断器を一斉に開く——影響は最大になる。",
+        "——遠隔を断ち手動で送電を保てる備えがあれば、闇はすぐ晴れる。"
+      ],
+      choices: [
+        { k: "厳冬の深夜、一斉に遮断器を開く", d: "連鎖停電を狙う", tag: "実行", fx: { dmg: +12 }, next: "done" },
+        { k: "手動運転に切り返され、すぐ復旧される", d: "抑止される", tag: "不発", fx: { dmg: -10 }, next: "caught" },
+      ],
+    },
+    _learn: [
+      "インフラは『落とすと社会が止まる』ほど狙われる。平時の備えが抑止になる。",
+      "制御系は<b>保守・遠隔のつなぎ目</b>と<b>人</b>から狙われる。多要素・監視・訓練で固める。",
+      "監視が接近を捉えれば、遮断の前に止められる。早期発見が要。",
+      "遠隔を断って手動で回せる事業者には、攻撃の圧力が効かない。",
+    ],
+    _src: '攻める側の視点は、守る側の優先順位を裏から照らすためのものです。手順は書かず判断のみ抽象化。下敷き:2015年のウクライナ電力網への攻撃。',
+  },
+};
+
+/* 決め所のカットイン(入場時)。label=大見出し, tone=good/bad/atk/neutral */
+const CUT = {
+  "hospital:defend:contain": { l: "封じ込め", t: "good" },
+  "hospital:defend:spread": { l: "拡散", t: "bad" },
+  "hospital:defend:paper": { l: "診療継続", t: "good" },
+  "hospital:defend:backup_fail": { l: "復旧不能", t: "bad" },
+  "hospital:attack:foothold": { l: "侵入成功", t: "atk" },
+  "hospital:attack:atk_win": { l: "制圧", t: "atk" },
+  "hospital:attack:atk_noticed": { l: "遮断", t: "good" },
+  "hospital:attack:hardtarget": { l: "標的変更", t: "neutral" },
+  "pension:defend:isolate": { l: "隔離", t: "good" },
+  "pension:defend:slow": { l: "流出進行", t: "bad" },
+  "pension:defend:good_data": { l: "被害最小", t: "good" },
+  "pension:defend:cover": { l: "隠蔽露見", t: "bad" },
+  "pension:attack:in": { l: "侵入成功", t: "atk" },
+  "pension:attack:atk_leak": { l: "情報流出", t: "atk" },
+  "pension:attack:atk_blocked": { l: "持出失敗", t: "good" },
+  "port:defend:triage": { l: "全面停止", t: "neutral" },
+  "port:defend:strain": { l: "軋む港", t: "neutral" },
+  "port:defend:manual": { l: "運用再開", t: "good" },
+  "port:defend:wait": { l: "港、沈黙", t: "bad" },
+  "port:attack:reach": { l: "中核到達", t: "atk" },
+  "port:attack:atk_stop": { l: "物流まひ", t: "atk" },
+  "port:attack:atk_caught": { l: "確保", t: "good" },
+  "deepfake:defend:verify": { l: "偽と判明", t: "good" },
+  "deepfake:defend:detect": { l: "違和感検知", t: "neutral" },
+  "deepfake:defend:caught_win": { l: "未然阻止", t: "good" },
+  "deepfake:defend:half_sent": { l: "一部被害", t: "neutral" },
+  "deepfake:defend:money_gone": { l: "送金消失", t: "bad" },
+  "deepfake:attack:build": { l: "本人完成", t: "atk" },
+  "deepfake:attack:done": { l: "送金成立", t: "atk" },
+  "deepfake:attack:foiled": { l: "露見", t: "good" },
+  "deepfake:attack:rough": { l: "看破", t: "good" },
+  "deepfake:attack:give": { l: "標的断念", t: "good" },
+  "grid:defend:manual_prep": { l: "手動奪還", t: "neutral" },
+  "grid:defend:investigate": { l: "一部停電", t: "bad" },
+  "grid:defend:ignore": { l: "闇、拡大", t: "bad" },
+  "grid:defend:hold": { l: "灯りを死守", t: "good" },
+  "grid:defend:overload": { l: "一部停電", t: "neutral" },
+  "grid:defend:partial_restore": { l: "拡大阻止", t: "neutral" },
+  "grid:defend:blackout": { l: "広域停電", t: "bad" },
+  "grid:attack:reach": { l: "制御網到達", t: "atk" },
+  "grid:attack:social": { l: "認証突破", t: "atk" },
+  "grid:attack:done": { l: "都市暗転", t: "atk" },
+  "grid:attack:caught": { l: "遮断前に阻止", t: "good" },
+  "grid:attack:blocked": { l: "多要素で阻止", t: "good" },
+  "grid:attack:give": { l: "標的断念", t: "good" },
+};
+
+/* 生体認証ビート(要所のみ)。rows=[{l:ラベル, s:ok|ng|scan, v:状態文}] */
+const GATE = {
+  "hospital:attack:foothold": {
+    h: "認証バイパス試行",
+    rows: [
+      { l: "ID / パスワード", s: "ng", v: "入手済み" },
+      { l: "多要素認証 (ワンタイム)", s: "ok", v: "未設定 → 回避" },
+      { l: "指紋 / 虹彩 / 静脈", s: "scan", v: "対象外" },
+    ],
+    note: "多要素認証が未設定だと、IDとパスワードだけで突破される。",
+  },
+  "pension:defend:isolate": {
+    h: "認証を即時強化",
+    rows: [
+      { l: "ID / パスワード 一斉リセット", s: "ok", v: "完了" },
+      { l: "多要素認証 有効化", s: "ok", v: "有効" },
+      { l: "指紋 / 静脈 / 虹彩 登録", s: "ok", v: "有効" },
+    ],
+    note: "奪われたIDを無力化。多要素と生体認証で、入られても次を止める。",
+  },
+  "port:attack:reach": {
+    h: "接続点の認証確認",
+    rows: [
+      { l: "保守経路 ID / パスワード", s: "ng", v: "流用" },
+      { l: "多要素認証", s: "ok", v: "未導入 → 通過" },
+      { l: "機器証明書 / 指紋", s: "scan", v: "未確認" },
+    ],
+    note: "外とのつなぎ目に多要素がないと、中核まで一直線。",
+  },
+  "deepfake:defend:detect": {
+    h: "本人性の確認 (liveness)",
+    rows: [
+      { l: "顔のまばたき・生体反応", s: "scan", v: "不自然" },
+      { l: "音声と口の同期", s: "ng", v: "ズレ検出" },
+      { l: "公式番号へコールバック", s: "ok", v: "本人が否定" },
+    ],
+    note: "画面は偽れても、登録番号への折り返しは偽れない。",
+  },
+  "deepfake:attack:build": {
+    h: "なりすまし生成",
+    rows: [
+      { l: "顔 合成 (SNS動画から)", s: "ng", v: "完成" },
+      { l: "声 合成 (公開音声から)", s: "ng", v: "完成" },
+      { l: "多要素 / コールバック対策", s: "scan", v: "相手次第" },
+    ],
+    note: "顔と声は公開情報で作れる。残る壁は、別経路の本人確認だけ。",
+  },
+  "grid:defend:manual_prep": {
+    h: "制御の奪還",
+    rows: [
+      { l: "遠隔指令 遮断", s: "ok", v: "完了" },
+      { l: "現地 手動運転へ", s: "ok", v: "切替" },
+      { l: "遠隔経路の多要素 再設定", s: "ok", v: "有効" },
+    ],
+    note: "遠隔を断ち、人の手に取り戻す。制御を奪われたまま調べない。",
+  },
+  "grid:attack:reach": {
+    h: "制御網の認証",
+    rows: [
+      { l: "保守経路 ID / パスワード", s: "ng", v: "流用" },
+      { l: "多要素認証", s: "ok", v: "未導入 → 通過" },
+      { l: "手動運転 / 監視", s: "scan", v: "相手次第" },
+    ],
+    note: "遠隔のつなぎ目に多要素と監視がないと、遮断器まで届く。",
+  },
+};
+
+/* ====== 専門解説(結末・折りたたみ)。攻撃の「段階」と効く「対策」だけを扱い、手順は書かない。
+   技術名はMITRE ATT&CK等、公開された防御知識ベースの呼称。 ====== */
+const TECH = {
+  hospital: {
+    lead: {
+      defend: "ランサムウェアは『暗号化』だけの事件ではない。侵入→横展開→復旧妨害→暗号化という<b>段階(キルチェーン)</b>で進む。どこか一段を断てれば被害は止まる。",
+      attack: "あなたが辿った道は、実際のランサムオペレーションの段階に対応する。各段に効く守りを一つ入れるだけで、この道は途切れる。",
+    },
+    chain: [
+      "初期侵入 — 公開資産の脆弱性や旧VPNから(ATT&CK Initial Access: T1190, T1133)",
+      "権限昇格・横展開 — 正規資格情報を悪用し奥へ(T1078, T1068, T1021)",
+      "復旧妨害 — バックアップ/シャドウコピーの無効化(T1490 Inhibit System Recovery)",
+      "影響 — データ暗号化による業務停止(T1486 Data Encrypted for Impact)",
+    ],
+    ctrl: [
+      "<b>境界の脆弱性管理</b> — 公開資産・VPNをKEV優先でパッチ、攻撃対象領域(ASM)を縮小",
+      "<b>フィッシング耐性MFA(FIDO2)＋EDR/XDR</b> — 初期侵入と横展開を検知・遮断",
+      "<b>最小権限・LAPS・PAM/JIT</b>＋ネットワーク<b>セグメンテーション</b> — 横展開を止める",
+      "<b>イミュータブル/オフラインの3-2-1バックアップ</b> — T1490を無力化、復旧の生命線",
+      "<b>演習済みのIR計画とBCP</b> — 修羅場の数十分を支える",
+    ],
+    refs: [
+      { t: "MITRE ATT&CK — T1486 Data Encrypted for Impact", u: "https://attack.mitre.org/techniques/T1486/" },
+      { t: "CISA — #StopRansomware Guide", u: "https://www.cisa.gov/resources-tools/resources/stopransomware-guide" },
+      { t: "NIST SP 800-61r2 — インシデント対応", u: "https://csrc.nist.gov/pubs/sp/800/61/r2/final" },
+      { t: "JPCERT/CC", u: "https://www.jpcert.or.jp/" },
+    ],
+  },
+  pension: {
+    lead: {
+      defend: "個人情報の流出は、入口(人)と置き場所(平文コピー)の二つの油断で決まる。入られても<b>中身が読めなければ</b>被害にならない。",
+      attack: "正面のシステムが固くても、人と置き場所の隙から大量の情報は抜ける。裏返せば、締める場所は明確だ。",
+    },
+    chain: [
+      "初期侵入 — 標的型メールの添付(T1566.001 Spearphishing Attachment)",
+      "探索 — 共有フォルダの平文PIIを発見(T1083 File and Directory Discovery, T1039)",
+      "収集 — 散在するコピーを集約(T1005 Data from Local System)",
+      "持ち出し — C2経由/別経路で外部へ(T1041, T1048 Exfiltration)",
+    ],
+    ctrl: [
+      "<b>意識向上訓練と通報文化</b> — 一人の油断を全体の被害にしない",
+      "<b>メール認証(DMARC/DKIM/SPF)とフィルタ</b> — なりすまし送信を減らす",
+      "<b>データ最小化＋need-to-know</b> — 作業用の平文コピーを残さない",
+      "<b>保存時暗号化＋アクセス制御＋DLP</b> — 抜かれても読めない・出せない",
+      "<b>出口(エグレス)監視</b>と<b>法令対応</b>(個人情報保護法の漏えい報告・本人通知)",
+    ],
+    refs: [
+      { t: "MITRE ATT&CK — T1566 Phishing", u: "https://attack.mitre.org/techniques/T1566/" },
+      { t: "個人情報保護委員会 — 漏えい等の報告", u: "https://www.ppc.go.jp/" },
+      { t: "IPA — 情報セキュリティ", u: "https://www.ipa.go.jp/security/" },
+      { t: "JPCERT/CC", u: "https://www.jpcert.or.jp/" },
+    ],
+  },
+  port: {
+    lead: {
+      defend: "物流インフラは<b>IT/OTの境界</b>と<b>外部保守経路</b>が弱点になりやすい。止まっても手作業で回せる備えが、攻撃の圧力を削ぐ。",
+      attack: "止まると困る相手ほど早く払う——が、保守経路を締め、縮退運用を持つ相手には圧力が効かない。",
+    },
+    chain: [
+      "初期侵入 — 外部リモート保守/取引先の信頼関係(T1133 External Remote Services, T1199 Trusted Relationship)",
+      "越境 — IT網からOT/制御系へ(IT/OT境界・パーデュモデル)",
+      "影響 — 中核停止による事業・物流の停止(T1486＋運用妨害)",
+    ],
+    ctrl: [
+      "<b>IT/OTセグメンテーション(パーデュモデル)</b>と資産インベントリ",
+      "<b>保守・遠隔経路のMFA＋監視(NDR)</b>とベンダ<b>サプライチェーンリスク管理</b>",
+      "<b>演習済みの手作業フォールバック(BCP)</b> — 止まっても回す",
+      "<b>段階復旧</b> — クリーン確認済みの系から、再汚染を防いで戻す",
+    ],
+    refs: [
+      { t: "MITRE ATT&CK for ICS", u: "https://attack.mitre.org/matrices/ics/" },
+      { t: "CISA — Industrial Control Systems（IEC 62443 等）", u: "https://www.cisa.gov/topics/industrial-control-systems" },
+      { t: "JPCERT/CC", u: "https://www.jpcert.or.jp/" },
+    ],
+  },
+  deepfake: {
+    lead: {
+      defend: "ディープフェイクBECは<b>マルウェアを使わない</b>。公開素材から本人を合成し、心理的圧力で手続きを飛ばさせる。<b>別経路の本人確認</b>が唯一の壁。",
+      attack: "顔も声も公開情報から作れる。だが『画面の本人を信じない』運用の前では、どんな精巧な合成も通らない。",
+    },
+    chain: [
+      "偵察(OSINT) — 公開SNS/動画から顔・声・在席を収集(T1589 Gather Victim Identity Information)",
+      "リソース開発 — 合成メディアと偽会議の用意(T1585/T1587 の概念)",
+      "初期侵入=社会工学 — 権威と緊急性で手続きを飛ばさせる(BEC/ビジネスメール詐欺)",
+      "影響 — 不正送金→資金洗浄(金銭的被害。マルウェア不使用)",
+    ],
+    ctrl: [
+      "<b>アウトオブバンド確認(コールバック)</b> — 登録済み番号へ自分から折り返す",
+      "<b>職務分掌と多人数承認</b> — 送金を一人で完結させない",
+      "<b>支払いコントロール</b>(上限・新規口座の保留・二重承認)",
+      "<b>『急かし』を手続き逸脱の根拠にしない</b>文化＋合成検知の併用",
+      "アカウント保護に<b>フィッシング耐性MFA(FIDO2)</b>",
+    ],
+    refs: [
+      { t: "FBI IC3 — Business Email Compromise", u: "https://www.ic3.gov/" },
+      { t: "MITRE ATT&CK — T1589", u: "https://attack.mitre.org/techniques/T1589/" },
+      { t: "IPA — 情報セキュリティ", u: "https://www.ipa.go.jp/security/" },
+      { t: "KnowBe4(背景)", u: "https://blog.knowbe4.com/" },
+    ],
+  },
+  grid: {
+    lead: {
+      defend: "重要インフラ攻撃は<b>IT網からOT/制御系への越境</b>で起きる。遠隔を断って<b>人の手に戻せる</b>こと(human-in-the-loop)が最後の砦。",
+      attack: "電源は連鎖の起点。だが遠隔を断ち手動で回せる事業者には、落としても早く戻され圧力にならない。",
+    },
+    chain: [
+      "初期侵入 — スピアフィッシングでIT網へ(T1566)",
+      "越境 — IT網から制御網/SCADAへ(MITRE ATT&CK for ICS)",
+      "制御 — 外部リモートサービスと不正な制御指令(ICS: T0822, T0855)",
+      "影響 — 遮断器の遠隔操作による可用性喪失(広域停電)",
+    ],
+    ctrl: [
+      "<b>IT/OTセグメンテーション</b>と制御系の<b>異常検知</b>",
+      "保守・遠隔経路の<b>多要素認証＋監視</b>",
+      "<b>手動運転の訓練(human-in-the-loop)</b> — 制御を人の手に取り戻す",
+      "<b>IEC 62443 / NERC-CIP(海外)</b>に沿う多層防御と復電手順",
+    ],
+    refs: [
+      { t: "MITRE ATT&CK for ICS", u: "https://attack.mitre.org/matrices/ics/" },
+      { t: "CISA — Industrial Control Systems", u: "https://www.cisa.gov/topics/industrial-control-systems" },
+      { t: "JPCERT/CC", u: "https://www.jpcert.or.jp/" },
+    ],
+  },
+};
+
+/* 上級のみ各場面に出す技術メモ。前の選択の是非ではなく、起きている事象を実務の言葉で添える。 */
+const STEP_TECH = {
+  "hospital:defend:start": "NIST IR=検知/分析。広域ファイル暗号化(T1486)の初動。<b>EDR/XDR</b>の振る舞い検知とSOCの一次トリアージ。",
+  "hospital:defend:contain": "NIST IR=封じ込め。横展開(T1021)の遮断。<b>ネットワーク分離・セグメンテーション</b>が要。",
+  "hospital:defend:eradicate": "NIST IR=根絶。残存アクセス/永続化(T1078, T1547)の除去。<b>資格情報リセット・侵入経路の封鎖</b>。",
+  "hospital:defend:restore_plan": "NIST IR=復旧。<b>イミュータブル/オフラインの3-2-1バックアップ</b>から検証復元(T1490の裏返し)。",
+  "hospital:defend:paper": "事業継続(BCP)。IT不在でも中核業務を回す。<b>演習済みの縮退運用</b>。",
+  "hospital:defend:backup_fail": "T1490 Inhibit System Recovery の成立。教訓: 控えを本番ネットから隔離・<b>改ざん不可(WORM)</b>に。",
+  "hospital:attack:start": "偵察(Reconnaissance)。守りの薄い標的選定。裏返し: <b>攻撃対象領域(ASM)の縮小</b>。",
+  "hospital:attack:foothold": "初期侵入: 公開資産の悪用(T1190)/外部リモート(T1133, 旧VPN)。守り: <b>KEV優先パッチ・境界EDR</b>。",
+  "hospital:attack:escalate": "権限昇格(T1068)＋正規資格情報(T1078)＋横展開(T1021)。守り: <b>LAPS・PAM/JIT・最小権限</b>。",
+  "hospital:attack:locate_backup": "復旧妨害(T1490, シャドウコピー/バックアップ無効化)。守り: <b>改ざん不可・オフライン控え</b>。",
+  "hospital:attack:atk_win": "影響: Data Encrypted for Impact(T1486)。守り: <b>耐性MFA＋EDR＋不変バックアップ</b>の三点。",
+  "hospital:attack:atk_noticed": "早期検知で阻止。守り: <b>EDRの振る舞い検知と即応(SOAR)</b>。",
+  "pension:defend:start": "初動。標的型メール(T1566.001 添付)の疑い。守り: <b>通報文化・メール認証(DMARC)</b>。",
+  "pension:defend:isolate": "封じ込め＋データ最小化。平文PII(T1083 探索の標的)の削減。守り: <b>最小権限・need-to-know</b>。",
+  "pension:defend:scope_leak": "影響範囲の特定(フォレンジック)。守り: <b>アクセス/監査ログの保全と解析</b>。",
+  "pension:defend:disclose": "法令対応。守り: <b>個人情報保護法の漏えい報告・本人通知</b>、相談窓口。",
+  "pension:defend:good_data": "保存時暗号化＋アクセス制御で持ち出しを無力化。守り: <b>暗号化・DLP・鍵管理</b>。",
+  "pension:attack:start": "計画。正面は堅牢→人と置き場所の隙。裏返し: <b>最弱点の管理</b>。",
+  "pension:attack:in": "初期侵入: スピアフィッシング(T1566)。守り: <b>訓練＋フィッシング耐性MFA</b>。",
+  "pension:attack:hunt_copies": "探索: ファイル/共有の発見(T1083, T1039)。守り: <b>データ棚卸し・平文コピー排除・DLP</b>。",
+  "pension:attack:exfil": "持ち出し: C2経由(T1041)/別経路(T1048)。守り: <b>出口(エグレス)監視・異常通信検知</b>。",
+  "pension:attack:atk_leak": "収集→流出の成立(T1005)。守り: <b>保存時暗号化で『抜けても読めない』</b>状態に。",
+  "port:defend:start": "中核システム停止。守り: <b>IT/OT境界(パーデュモデル)の把握・資産インベントリ</b>。",
+  "port:defend:triage": "封じ込め: 広げないための計画停止。守り: <b>セグメント遮断・侵害範囲の切り分け</b>。",
+  "port:defend:coordinate": "復旧連携。守り: <b>関係機関・ベンダとのIR連携</b>、サプライチェーンのIR計画。",
+  "port:defend:restore_order": "段階復旧。守り: <b>クリーン確認済みの系から・再汚染防止</b>。",
+  "port:defend:manual": "縮退運用(BCP)。守り: <b>手作業フォールバックの事前演習</b>。",
+  "port:attack:start": "偵察: 止まると困る社会インフラ選定。裏返し: <b>重要度に応じた備え</b>。",
+  "port:attack:reach": "初期侵入: 外部リモート保守(T1133)/取引先の信頼関係(T1199)。守り: <b>保守経路のMFA・監視・ベンダ管理</b>。",
+  "port:attack:persist": "潜伏: 発見前の居座り。守り: <b>接続点のEDR/NDR・異常検知</b>。",
+  "port:attack:trigger": "影響: 運用妨害(T1486＋事業停止)。守り: <b>手動運用の備えで打撃を減殺</b>。",
+  "port:attack:atk_stop": "停止の成立。守り: <b>IT/OT分離＋縮退運用</b>で圧力を無効化。",
+  "deepfake:defend:start": "BEC＋合成メディア。『至急・極秘・記録禁止』は危険信号。守り: <b>職務分掌・多人数承認</b>。",
+  "deepfake:defend:callback": "アウトオブバンド確認。守り: <b>登録済み番号へのコールバック</b>(会議内では確かめない)。",
+  "deepfake:defend:detect": "合成検知。口と音の同期ズレ・SNS由来素材。守り: <b>違和感を疑える人＋AI検知の併用</b>。",
+  "deepfake:defend:contain_fraud": "封じ込め: 横展開(他の標的)防止。守り: <b>全社周知・公開素材の削除申請・通報</b>。",
+  "deepfake:defend:verify": "本人確認の成立=詐欺無効化。守り: <b>別経路確認＋支払いコントロール</b>。",
+  "deepfake:defend:money_gone": "送金成立→資金洗浄(多重転送)。守り: 事後は<b>即時通報・口座凍結の初速</b>が鍵。",
+  "deepfake:attack:start": "偵察(OSINT): 公開SNS/動画から顔・声の素材(T1589)。守り: <b>露出の最小化</b>。",
+  "deepfake:attack:build": "リソース開発: 合成メディアの作成(T1585/T1587の概念)。守り: <b>『画面の本人を信じない』運用</b>。",
+  "deepfake:attack:rehearse": "社会工学の筋書き: 緊急性・権威・口止め。守り: <b>『急かされたら折り返す』を手順化</b>。",
+  "deepfake:attack:pressure": "実行: BECの心理的圧力。守り: <b>多人数承認＋コールバック</b>で圧力を無効化。",
+  "deepfake:attack:done": "金銭的被害の成立(マルウェア不使用)。守り: <b>支払い統制・職務分掌</b>。",
+  "grid:defend:start": "ICS/SCADA異常。遠隔指令で遮断器が動作(MITRE ATT&CK for ICS)。守り: <b>制御網の監視・異常検知</b>。",
+  "grid:defend:manual_prep": "制御の奪還: 人手運用(human-in-the-loop)。守り: <b>手動運転の訓練</b>。",
+  "grid:defend:seal_route": "根絶: 遠隔/保守経路の封鎖(ICS T0822)。守り: <b>多要素＋IT/OT分離</b>。",
+  "grid:defend:coordinate_grid": "社会連携での被害最小化。守り: <b>優先負荷の合意・関係機関連携</b>。",
+  "grid:defend:hold": "可用性の維持。守り: <b>IEC 62443準拠の多層防御・手動運用の砦</b>。",
+  "grid:attack:start": "偵察: 電力=連鎖の起点選定。裏返し: <b>重要インフラの多層防御</b>。",
+  "grid:attack:reach": "侵入→OT到達: 保守経路(ICS T0822)。守り: <b>境界のMFA・監視・セグメント</b>。",
+  "grid:attack:social": "資格情報の社会工学取得。守り: <b>運用員訓練＋フィッシング耐性MFA</b>。",
+  "grid:attack:map_grid": "標的選定: 制御構成の読み取り。守り: <b>制御系の読み取り/問い合わせ監視</b>。",
+  "grid:attack:time_attack": "影響: 不正な制御指令(ICS T0855)→可用性喪失。守り: <b>遠隔遮断＋手動運用で短期化</b>。",
+  "grid:attack:done": "広域停電の成立。守り: <b>human-in-the-loopと復電手順</b>(ウクライナ2015は手動復旧)。",
+};
+
+/* ====== 状態 ====== */
+let sel = { scn: null, role: null, diff: null };
+let game = null; // { scn, role, diff, meters, step }
+
+/* ====== セットアップ描画 ====== */
+const $ = (id) => document.getElementById(id);
+
+function buildSetup() {
+  const sg = $("scn-grid");
+  sg.innerHTML = "";
+  Object.entries(SCENARIOS).forEach(([key, s]) => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<span class="k">${s.name}</span><span class="d">${s.tag} — ${s.blurb}</span><span class="scn-src">${s.src}</span>`;
+    b.onclick = () => { sel.scn = key; mark(sg, b); refreshStart(); };
+    sg.appendChild(b);
+  });
+  const rg = $("role-grid");
+  rg.innerHTML = "";
+  Object.entries(ROLES).forEach(([key, r]) => {
+    const b = document.createElement("button");
+    b.className = "opt" + (key === "attack" ? " role-attack" : "");
+    b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<span class="k">${r.name}</span><span class="d">${r.desc}</span>`;
+    b.onclick = () => { sel.role = key; mark(rg, b); refreshStart(); };
+    rg.appendChild(b);
+  });
+  const dg = $("diff-grid");
+  dg.innerHTML = "";
+  Object.entries(DIFFS).forEach(([key, d]) => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<span class="k">${d.name}</span><span class="d">${d.desc}</span>`;
+    b.onclick = () => { sel.diff = key; mark(dg, b); refreshStart(); };
+    dg.appendChild(b);
+  });
+}
+
+function mark(grid, btn) {
+  [...grid.children].forEach((c) => c.setAttribute("aria-pressed", "false"));
+  btn.setAttribute("aria-pressed", "true");
+}
+
+function refreshStart() {
+  const ok = sel.scn && sel.role && sel.diff;
+  $("start").disabled = !ok;
+  $("start-hint").textContent = ok
+    ? `${SCENARIOS[sel.scn].name} / ${ROLES[sel.role].name} / ${DIFFS[sel.diff].name}`
+    : "舞台・側・難易度を選んでください";
+}
+
+/* ====== ゲーム進行 ====== */
+function startGame() {
+  game = {
+    scn: sel.scn, role: sel.role, diff: sel.diff,
+    meters: sel.role === "attack" ? { dmg: 20, trust: 0 } : { dmg: 0, trust: 100 },
+    step: 0,
+    log: [],
+  };
+  $("setup").hidden = true;
+  $("end").hidden = true;
+  $("play").hidden = false;
+  $("play").dataset.scn = game.scn; // 舞台ごとの背景画像を敷く
+  const s = SCENARIOS[game.scn];
+  // HUDラベル(攻める側はメーターの意味を変える)
+  if (game.role === "attack") {
+    $("m1-label").textContent = "侵入度";
+    $("m2-label").textContent = "露見リスク";
+  } else {
+    $("m1-label").textContent = s.m1;
+    $("m2-label").textContent = s.m2;
+  }
+  renderRoleChip();
+  renderScene("start", null);
+}
+
+function renderRoleChip() {
+  const r = ROLES[game.role];
+  const chip = $("hud-role");
+  chip.textContent = `${SCENARIOS[game.scn].name} · ${r.name}`;
+  chip.className = "role-chip " + (game.role === "attack" ? "atk" : "def");
+}
+
+function updateHud() {
+  const atk = game.role === "attack";
+  // 攻める側: m1=侵入度(dmgをそのまま前向きに), m2=露見リスク(trustの裏返しだが、ここでは別管理せずdmg/trustを流用)
+  const m1 = Math.max(0, Math.min(100, game.meters.dmg));
+  // 守る側 trust 高いほど良い / 攻める側 露見リスクは低いほど良い(trustの小ささ=バレてない → 表示は露見度=trust)
+  const m2raw = game.meters.trust;
+  const m2 = Math.max(0, Math.min(100, atk ? Math.max(0, m2raw) : m2raw));
+  $("m1-val").textContent = Math.round(m1);
+  $("m2-val").textContent = Math.round(m2);
+  $("m1-bar").style.width = m1 + "%";
+  $("m2-bar").style.width = m2 + "%";
+  $("hud-step").textContent = "判断 " + (game.step);
+}
+
+function prefersReduce() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// 決め所のカットイン演出(RGBずれ+スキャンのフラッシュ)。自動で消える / クリック・Escで即スキップ
+function showCutIn(label, tone) {
+  let o = document.getElementById("cutin");
+  if (!o) { o = document.createElement("div"); o.id = "cutin"; document.body.appendChild(o); }
+  o.className = "cutin " + (tone || "neutral");
+  o.innerHTML = `<div class="ci-inner"><span class="ci-bar"></span><span class="ci-word" data-w="${label}">${label}</span><span class="ci-sub">Incident Log // ${SCENARIOS[game.scn].name}</span></div>`;
+  o.hidden = false;
+  o.classList.remove("show"); void o.offsetWidth; o.classList.add("show");
+  AUDIO.cut(tone);
+  const dur = prefersReduce() ? 320 : 1200;
+  let done = false;
+  const finish = () => { if (done) return; done = true; o.classList.remove("show"); o.hidden = true; document.removeEventListener("keydown", onKey); };
+  const timer = setTimeout(finish, dur);
+  const onKey = (e) => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { clearTimeout(timer); finish(); } };
+  o.onclick = () => { clearTimeout(timer); finish(); };
+  document.addEventListener("keydown", onKey);
+}
+
+function gateHTML(gate) {
+  let h = `<div class="authgate"><div class="ag-h">${gate.h}</div>`;
+  gate.rows.forEach((r) => {
+    h += `<div class="ag-row"><span class="ag-label">${r.l}</span><span class="ag-state ${r.s}">${r.v}</span></div>`;
+  });
+  h += `<div class="ag-note">${gate.note}</div></div>`;
+  return h;
+}
+
+function glossify(html) {
+  if (DIFFS[game.diff].hints !== true) return html;
+  // 初級のみ: 用語に注釈を一度だけ添える
+  let out = html;
+  const used = new Set();
+  Object.keys(GLOSS).forEach((term) => {
+    if (used.has(term)) return;
+    const idx = out.indexOf(term);
+    if (idx !== -1) {
+      used.add(term);
+      const note = `<span style="color:var(--ink-dim);font-size:.88em">(${GLOSS[term]})</span>`;
+      out = out.slice(0, idx + term.length) + note + out.slice(idx + term.length);
+    }
+  });
+  return out;
+}
+
+function renderScene(id, feedback) {
+  const script = SCRIPTS[game.scn + ":" + game.role];
+  const sc = script[id];
+  game.cur = id;
+  game.step += 1;
+  updateHud();
+
+  const el = $("scene");
+  const key = game.scn + ":" + game.role + ":" + id;
+  const atk = game.role === "attack";
+  let html = `<p class="clock">${sc.clock}</p>`;
+
+  // 端末ログ(演出・抽象化)
+  const term = TERM[key];
+  if (term) {
+    html += `<div class="terminal ${atk ? "atk" : "def"}">`;
+    term.forEach((line) => {
+      const esc = line.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const styled = esc.replace(/^([a-z]+&gt;)/, '<span class="tp">$1</span>');
+      html += `<div class="tl">${styled}</div>`;
+    });
+    html += `<div class="term-cap">※ゲーム内の抽象表現。実在のコマンドではありません</div></div>`;
+  }
+
+  // フィードバック(前の選択の結果)。中級以上は fb を控えめに、上級は非表示
+  if (feedback && sc.fb) {
+    const showFb = DIFFS[game.diff].hints === true || game.diff === "mid";
+    if (showFb) {
+      html += `<div class="feedback ${sc.fb.t}"><span class="ft">${sc.fb.s}</span>${sc.fb.m}</div>`;
+    }
+  }
+
+  // 生体認証ビート(要所のみ)
+  const gate = GATE[key];
+  if (gate) html += gateHTML(gate);
+
+  html += `<h2>${sc.h}</h2><div class="body">`;
+  sc.body.forEach((p) => { html += `<p>${glossify(p)}</p>`; });
+  html += `</div>`;
+
+  // 専門家の助言(影の生態系の声)
+  const adv = ADVISOR[key];
+  if (adv) {
+    html += `<div class="advisor ${atk ? "atk" : "def"}"><span class="adv-who">${adv.who}</span><span class="adv-line">${adv.line}</span></div>`;
+  }
+
+  // 技術メモ(上級のみ)。起きている事象を実務の言葉で添える。
+  if (game.diff === "hard") {
+    const st = STEP_TECH[key];
+    if (st) html += `<div class="techtag"><span class="tt-h">技術メモ</span>${st}</div>`;
+  }
+
+  html += `<div class="choices"></div>`;
+  el.innerHTML = html;
+  el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+
+  const cwrap = el.querySelector(".choices");
+  sc.choices.forEach((ch) => {
+    const b = document.createElement("button");
+    b.className = "choice";
+    let inner = `<span class="ck">${ch.k}</span><span class="cd">${ch.d}</span>`;
+    if (DIFFS[game.diff].hints === true && ch.tag) inner += `<span class="ctag">${ch.tag}</span>`;
+    b.innerHTML = inner;
+    b.onclick = () => choose(ch);
+    cwrap.appendChild(b);
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // 入場カットイン
+  const cut = CUT[key];
+  if (cut) showCutIn(cut.l, cut.t);
+}
+
+/* 制覇ボード:クリアした舞台×側の最高ランクを端末に記録(各自のブラウザのみ) */
+const RANK_ORDER = { S: 4, A: 3, B: 2, C: 1 };
+function loadClears() {
+  try { return JSON.parse(localStorage.getItem("iz_clear_v1") || "{}") || {}; } catch (e) { return {}; }
+}
+function saveClear(key, rank) {
+  if (!RANK_ORDER[rank]) return;
+  try {
+    const m = loadClears();
+    if (!m[key] || RANK_ORDER[rank] > RANK_ORDER[m[key]]) { m[key] = rank; localStorage.setItem("iz_clear_v1", JSON.stringify(m)); }
+  } catch (e) { /* 保存できなくても動作は続く */ }
+}
+function renderBoard() {
+  const board = $("board");
+  if (!board) return;
+  const m = loadClears();
+  const cleared = Object.keys(m).length, total = Object.keys(SCENARIOS).length * 2;
+  let cells = "";
+  Object.entries(SCENARIOS).forEach(([sk, s]) => {
+    ["defend", "attack"].forEach((rk) => {
+      const r = m[sk + ":" + rk];
+      cells += `<div class="bcell ${r ? "done " + rk : ""}"><span class="bc-scn">${s.name}</span><span class="bc-role">${rk === "defend" ? "守" : "攻"}</span><span class="bc-rank">${r || "–"}</span></div>`;
+    });
+  });
+  board.innerHTML = `<div class="board-h">制覇状況 <span>${cleared} / ${total}</span></div><div class="board-grid">${cells}</div>`;
+}
+
+function classifyChoice(ch) {
+  const atk = game.role === "attack";
+  const d = (ch.fx && ch.fx.dmg) || 0, t = (ch.fx && ch.fx.trust) || 0;
+  if (atk) return d <= 0 ? "restraint" : "push";
+  const net = t - d;
+  return net > 0 ? "good" : (net < 0 ? "poor" : "neutral");
+}
+
+function choose(ch) {
+  AUDIO.click();
+  // 選択ログに記録(結末の振り返り用)
+  const curH = SCRIPTS[game.scn + ":" + game.role][game.cur].h;
+  game.log.push({ h: curH, label: ch.k, q: classifyChoice(ch) });
+  if (ch.fx) {
+    if (typeof ch.fx.dmg === "number") game.meters.dmg += ch.fx.dmg;
+    if (typeof ch.fx.trust === "number") game.meters.trust += ch.fx.trust;
+  }
+  if (ch.next === "END") { renderEnding(); return; }
+  renderScene(ch.next, true);
+}
+
+/* ====== 結末 ====== */
+function computeEnding() {
+  // 結末は到達したシーンに明示された end キーで決める(物語と必ず一致させる)
+  const script = SCRIPTS[game.scn + ":" + game.role];
+  const sc = script[game.cur];
+  if (sc && sc.end) return sc.end;
+  return game.role === "attack" ? "atk_partial" : "mix";
+}
+
+function renderEnding() {
+  const script = SCRIPTS[game.scn + ":" + game.role];
+  const s = SCENARIOS[game.scn];
+  const key = computeEnding();
+  const atk = game.role === "attack";
+
+  let vClass, vText, h, outcome;
+  if (atk) {
+    if (key === "atk_deterred") {
+      vClass = "win"; vText = "攻撃は不発 — 守りの勝ち";
+      h = "割に合わない、と見なされた";
+      outcome = "備えの固い相手を前に、攻撃者は手を引いた。これが「守りが効いている」状態。攻める側を体験したことで、守る側が何を優先すべきかが裏から見えたはず。";
+    } else if (key === "atk_success") {
+      vClass = "loss"; vText = "攻撃は通った — 守る側の宿題";
+      h = "通ってしまった。だから、分かる";
+      outcome = "攻撃が成立した。これは「守る側がどこを怠ると、ここまでやられるか」の裏返し。下の対策を一つでも入れれば、同じ手は効かなくなる。";
+    } else {
+      vClass = "mix"; vText = "途中で止められた";
+      h = "気づかれ、止められた";
+      outcome = "攻撃は途中で防がれた。守る側の素早い気づきや備えが、被害を小さくしたということ。";
+    }
+  } else {
+    if (key === "win") {
+      vClass = "win"; vText = "最小被害で収束 — 見事";
+      h = `${s.name}を、守りきった`;
+      outcome = "正しい初動と備えで、被害を最小に抑え、信頼も守った。平時の準備が、修羅場の数十分を支える——それがこのゲームで一番伝えたいこと。";
+    } else if (key === "mix") {
+      vClass = "mix"; vText = "被害は出たが、立て直した";
+      h = `痛手を負いつつ、${s.name}は踏みとどまった`;
+      outcome = "完璧ではなかったが、隠さず素早く動いたことで致命傷は避けた。どの判断がもう少し早ければ被害を減らせたか、下の学びと見比べてみてほしい。";
+    } else {
+      vClass = "loss"; vText = "被害が拡大した";
+      h = `${s.name}は、大きく傷ついた`;
+      outcome = "初動の遅れや備え不足が、被害を広げた。悔しいが、ここで分かったことこそ価値がある。もう一度、違う判断で挑めば結果は変わる。";
+    }
+  }
+
+  const learnLis = script._learn.map((x) => `<li>${x}</li>`).join("");
+
+  // 評価ランク(結末から)
+  const RANK = {
+    win: { r: "S", m: "完全対応" }, mix: { r: "B", m: "辛くも収束" }, loss: { r: "C", m: "被害甚大" },
+    atk_success: { r: "S", m: "攻撃貫徹 — 守る側の最悪ケース" }, atk_partial: { r: "B", m: "途中で阻止された" }, atk_deterred: { r: "C", m: "標的を断念" },
+  }[key] || { r: "—", m: "" };
+  saveClear(game.scn + ":" + game.role, RANK.r);
+
+  // 選択ログ
+  const qMark = { good: "◎", poor: "△", neutral: "・", restraint: "抑", push: "攻" };
+  const logLis = game.log.map((e) =>
+    `<li><span class="pl-q ${e.q}">${qMark[e.q] || "・"}</span><span class="pl-t">${e.label}</span></li>`
+  ).join("");
+  const pathBlock = game.log.length
+    ? `<div class="pathlog"><div class="pl-h">あなたの選択(${game.log.length}手)</div><ol>${logLis}</ol>${game.role === "defend" ? '<p class="pl-leg">◎ 好手 ／ △ 悪手 ／ ・ 中立</p>' : '<p class="pl-leg">攻 攻勢 ／ 抑 抑制</p>'}</div>`
+    : "";
+
+  // 専門解説(ATT&CK × 対策 × 出典)。折りたたみ。初級者を圧迫せず、詳しい人が開ける。
+  const tech = TECH[game.scn];
+  let techBlock = "";
+  if (tech) {
+    const lead = atk ? tech.lead.attack : tech.lead.defend;
+    const chainLis = tech.chain.map((x) => `<li>${x}</li>`).join("");
+    const ctrlLis = tech.ctrl.map((x) => `<li>${x}</li>`).join("");
+    const refLis = tech.refs.map((r) => `<a href="${r.u}" target="_blank" rel="noopener noreferrer">${r.t}</a>`).join("");
+    techBlock = `
+    <details class="techbox"${atk ? ' data-atk="1"' : ""}>
+      <summary>専門解説 — 攻撃の段階と、効く対策(ATT&CK × 対策 × 出典)</summary>
+      <div class="tb-body">
+        <p class="tb-lead">${lead}</p>
+        <div class="tb-h">攻撃の段階(キルチェーン)</div>
+        <ol class="tb-chain">${chainLis}</ol>
+        <div class="tb-h">効く対策(どこか一段を断てば止まる)</div>
+        <ul class="tb-ctrl">${ctrlLis}</ul>
+        <div class="tb-h">出典・一次情報</div>
+        <div class="tb-refs">${refLis}</div>
+        <p class="tb-note">※攻撃の手順は書かず、段階と対策だけを扱っています。技術名はMITRE ATT&CK等、公開された防御知識ベースの呼称です。</p>
+      </div>
+    </details>`;
+  }
+
+  const el = $("ending");
+  el.innerHTML = `
+    <p class="verdict ${vClass}">${vText}</p>
+    <div class="rankrow">
+      <span class="rankbadge rk-${vClass}">${RANK.r}</span>
+      <div class="rank-meta"><span class="rank-label">RANK</span><span class="rank-m">${RANK.m}</span></div>
+    </div>
+    <h2>${h}</h2>
+    <p class="outcome">${outcome}</p>
+    ${pathBlock}
+    <div class="learn">
+      <div class="lh">この事件が教えてくれること</div>
+      <ul>${learnLis}</ul>
+    </div>
+    <p class="source">${script._src}</p>
+    ${techBlock}
+    <div class="ending-actions">
+      <button class="btn-ghost" id="again">同じ舞台で、別の判断を試す</button>
+      <button class="btn-ghost" id="other">別の舞台・側を選ぶ</button>
+    </div>
+  `;
+  el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+  $("play").hidden = true;
+  $("end").hidden = false;
+  // 結末のカットイン
+  const endCut = {
+    win: { l: "防衛成功", t: "good" }, mix: { l: "辛くも収束", t: "neutral" }, loss: { l: "被害拡大", t: "bad" },
+    atk_success: { l: "攻撃成立", t: "atk" }, atk_partial: { l: "途中で阻止", t: "good" }, atk_deterred: { l: "標的断念", t: "good" },
+  }[key];
+  if (endCut) showCutIn(endCut.l, endCut.t);
+  AUDIO.end(vClass);
+  $("again").onclick = () => startGame();
+  $("other").onclick = () => { $("end").hidden = true; $("setup").hidden = false; renderBoard(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ====== 起動 ====== */
+/* 効果音(合成・外部ファイルなし)。最初のクリックで有効化。mキー または 音ボタンでミュート */
+const AUDIO = {
+  ctx: null, on: true,
+  init() { try { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} },
+  load() { try { if (localStorage.getItem("iz_sound") === "off") this.on = false; } catch (e) {} },
+  save() { try { localStorage.setItem("iz_sound", this.on ? "on" : "off"); } catch (e) {} },
+  blip(freq, dur, type, vol) {
+    if (!this.on) return; this.init(); const c = this.ctx; if (!c) return;
+    try {
+      const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+      o.type = type || "sine"; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.07, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.12));
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + (dur || 0.12) + 0.03);
+    } catch (e) {}
+  },
+  click() { this.blip(430, 0.07, "triangle", 0.045); },
+  cut(tone) {
+    const map = { good: [523, 784], bad: [300, 150], atk: [330, 233], neutral: [440, 660] };
+    const f = map[tone] || map.neutral;
+    this.blip(f[0], 0.16, "sawtooth", 0.055); setTimeout(() => this.blip(f[1], 0.2, "sawtooth", 0.045), 95);
+  },
+  end(kind) {
+    const seq = kind === "win" ? [523, 659, 784] : (kind === "loss" ? [330, 247, 165] : [440, 554, 440]);
+    const type = kind === "loss" ? "sawtooth" : "triangle";
+    seq.forEach((f, i) => setTimeout(() => this.blip(f, 0.28, type, 0.06), 260 + i * 130));
+  },
+  toggle() { this.on = !this.on; this.save(); if (this.on) this.click(); updateSoundLabel(); },
+};
+AUDIO.load();
+function updateSoundLabel() {
+  const b = document.getElementById("sound-toggle");
+  if (b) { b.textContent = AUDIO.on ? "♪ 音 オン" : "♪ 音 オフ"; b.setAttribute("aria-pressed", AUDIO.on ? "true" : "false"); }
+}
+
+buildSetup();
+renderBoard();
+updateSoundLabel();
+$("start").onclick = startGame;
+{
+  const sb = document.getElementById("sound-toggle");
+  if (sb) sb.onclick = () => AUDIO.toggle();
+}
+document.addEventListener("keydown", (e) => { if (e.key === "m" || e.key === "M") AUDIO.toggle(); });
+
+/* 数字キー(1〜4)で選択肢を選べる */
+document.addEventListener("keydown", (e) => {
+  if ($("play").hidden) return;
+  const ci = document.getElementById("cutin");
+  if (ci && !ci.hidden) return;
+  const n = ["1", "2", "3", "4"].indexOf(e.key);
+  if (n < 0) return;
+  const btns = document.querySelectorAll("#scene .choice");
+  if (btns[n]) { e.preventDefault(); btns[n].click(); }
+});
+
+/* 唯一の演出:開幕の状況行をタイプ表示(動きを抑える設定なら即表示) */
+(function typeStatus() {
+  const el = $("typed");
+  if (!el) return;
+  const msg = "インシデント検知 — 対応要員を待機中";
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { el.textContent = msg; return; }
+  let i = 0;
+  (function step() {
+    el.textContent = msg.slice(0, i);
+    if (i++ <= msg.length) setTimeout(step, 46);
+  })();
+})();
+</script>
+</body>
+</html>
