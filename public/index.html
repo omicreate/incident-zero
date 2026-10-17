@@ -712,14 +712,16 @@ function saveGame() { store(SAVE_KEY, G && !G.ended ? G : null); }
 function savedGame() { const s = load(SAVE_KEY); return s && !s.ended && s.hidden && typeof s.t === "number" ? s : null; }
 
 /* --- 感想と利用状況(匿名)。Googleフォームの回答として送る --- */
-const ENTRY_KEYS = ["kind", "sid", "ver", "clock", "steps", "rank", "score", "ending", "answers", "fun", "again", "stuck", "comment", "device", "plays", "elapsed"];
+const ENTRY_KEYS = ["kind", "sid", "ver", "clock", "steps", "rank", "score", "ending", "answers", "fun", "again", "stuck", "comment", "device", "plays", "elapsed", "src"];
+// どこから来たか(リンクに付けた ?src=note_o04 など)。英数字と _ - だけを残す
+const SRC = (new URLSearchParams(location.search).get("src") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
 function isNarrow() { return window.matchMedia && window.matchMedia("(max-width: 760px)").matches; }
 function elapsedSec() { return G && G.startedAt ? Math.round((Date.now() - G.startedAt) / 1000) : ""; }
 function send(kind, data) {
   if (!CONFIG.form) return false;
   // 利用状況は「送らない」を選んだ人からは送らない。感想は本人が送るボタンを押したときだけ
   if (!STATS.telemetry && kind !== "feedback" && kind !== "comment") return false;
-  const all = Object.assign({ kind, sid: G ? G.sid : "", ver: CONFIG.version, device: isNarrow() ? "スマホ" : "PC", plays: STATS.plays }, data || {});
+  const all = Object.assign({ kind, sid: G ? G.sid : "", ver: CONFIG.version, device: isNarrow() ? "スマホ" : "PC", plays: STATS.plays, src: SRC }, data || {});
   const body = new URLSearchParams();
   for (const k of ENTRY_KEYS) {
     if (all[k] !== undefined && all[k] !== null && all[k] !== "" && CONFIG.form.entries[k]) body.append(CONFIG.form.entries[k], String(all[k]).slice(0, 1000));

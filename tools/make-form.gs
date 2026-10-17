@@ -14,7 +14,7 @@
  */
 function makeForm() {
   const KEYS = ["kind", "sid", "ver", "clock", "steps", "rank", "score", "ending", "answers",
-                "fun", "again", "stuck", "comment", "device", "plays", "elapsed"];
+                "fun", "again", "stuck", "comment", "device", "plays", "elapsed", "src"];
 
   const form = FormApp.create("インシデント・ゼロ 感想と利用状況");
   form.setDescription("ゲーム「さくら町立病院の一夜」から自動で送られる回答です。匿名で、個人が分かる情報は含みません。");
