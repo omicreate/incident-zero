@@ -1,7 +1,8 @@
-# push と PR のたびに、分岐と演出データの整合を確かめる(依存なし・数秒で終わる)。
+# main への push と PR のたびに、分岐と演出データの整合を確かめる(依存なし・数秒で終わる)。
 name: check
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -10,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - run: node tools/check.mjs
